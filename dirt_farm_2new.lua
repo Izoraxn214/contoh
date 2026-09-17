@@ -161,9 +161,15 @@ function warpDFWorld(worldEntry)
     return warp(wName, dId)
 end
 
+-- Pembacaan Inventoris Universal
 function inv(itemID)
     for _, item in pairs(safeGetInventory()) do
-        if item and item.id == itemID then return item.amount end
+        if item then
+            local id = item.id or item.itemid or item.item_id
+            if id == itemID then 
+                return item.amount or 0 
+            end
+        end
     end
     return 0
 end
@@ -265,10 +271,20 @@ function findMainDoor()
     return 50, 29
 end
 
+-- Pengecekan Stok WL/Entrance dengan Jeda Sync Inventoris
 function ensureSetupItems()
     if not autoDF_running then return end
-    if inv(WorldLockID) == 0 or inv(EntranceID) < 2 then
-        LogToConsole("`w[`0Setup`w] Item WL/Entrance kurang, mengambil ke Storage...")
+
+    -- Jeda sync inventoris setelah warp agar data tas terisi penuh dari server
+    if #safeGetInventory() == 0 then
+        Sleep(1500)
+    end
+
+    local currentWL = inv(WorldLockID)
+    local currentDoor = inv(EntranceID)
+
+    if currentWL == 0 or currentDoor < 2 then
+        LogToConsole("`w[`0Setup`w] WL (" .. currentWL .. ") / Entrance (" .. currentDoor .. ") kurang. Restock ke Storage...")
         local currentWorld = safeGetWorldName()
         if currentWorld == "" then return end
         
@@ -624,7 +640,7 @@ function brkLv_12()
     end
 end
 
--- Re-check Retry untuk Pasang Dirt
+-- Re-check Retry untuk Pasang Dirt (Anti Hole/Bolong)
 function plcDrt_2()
     for tiley = 24, 2, -2 do
         if not autoDF_running then return end
