@@ -7,8 +7,8 @@ Config = {
      },
 
     DelaySettings = {
-        DELAY_PLACE = 80,
-        DELAY_BREAK = 180
+        DELAY_PLACE = 120, -- Anti Soft-Ban
+        DELAY_BREAK = 220  -- Anti Soft-Ban
     }
 }
 
@@ -41,23 +41,19 @@ EnablePlace = true
 HitCount = 1
 VerifyPunch = false
 
--- State Auto Drop Setting (Seed / Item Utama)
+-- State Auto Drop Setting (Format ID:X:Y)
 AutoDropEnabled = false
 MinToDrop = 190
-DropPosX = 26
-DropPosY = 11
 DropWorld = "SDZRR"
 DropDoor = ""
-CustomDropIDs = "3, 15, 5, 11"
+CustomDropCoords = "3:26:11, 15:28:11, 5:30:11, 11:32:11"
 
--- State Trash World Setting
+-- State Trash World Setting (Format ID:X:Y)
 TrashWorldEnabled = true
 MinTrashToDrop = 50
-TrashPosX = 26
-TrashPosY = 11
 TrashWorld = "TRASHWORLD"
 TrashDoor = ""
-CustomTrashIDs = "4, 10, 14"
+CustomTrashCoords = "4:35:11, 10:37:11, 14:39:11"
 
 -- State Auto Pick Setting
 AutoPickEnabled = false
@@ -85,6 +81,18 @@ RandWithNumber = false
 
 math.randomseed(os.time())
 
+-- Parser Koordinat Presisi (Format: ID:X:Y)
+local function parseCoordMap(str)
+    local map = {}
+    for entry in tostring(str):gmatch("[^,%s]+") do
+        local id, x, y = entry:match("(%d+):(%d+):(%d+)")
+        if id and x and y then
+            map[tonumber(id)] = { x = tonumber(x), y = tonumber(y) }
+        end
+    end
+    return map
+end
+
 local function generateRandomWorld(length, withNum)
     local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     if withNum then chars = chars .. "0123456789" end
@@ -94,26 +102,6 @@ local function generateRandomWorld(length, withNum)
         res = res .. chars:sub(rand, rand)
     end
     return res
-end
-
-local function getDropIDList()
-    local ids = {}
-    for id in tostring(CustomDropIDs):gmatch("[^,%s]+") do
-        local num = tonumber(id)
-        if num then table.insert(ids, num) end
-    end
-    if #ids == 0 then ids = {3, 15, 5, 11} end
-    return ids
-end
-
-local function getTrashIDList()
-    local ids = {}
-    for id in tostring(CustomTrashIDs):gmatch("[^,%s]+") do
-        local num = tonumber(id)
-        if num then table.insert(ids, num) end
-    end
-    if #ids == 0 then ids = {4, 10, 14} end
-    return ids
 end
 
 local function safeTile(x, y)
@@ -176,16 +164,14 @@ end
 function tnjk1_3(x, y)
     if not EnableBreak then return end
     local px, py = getLocalPos()
-    for i = 1, (HitCount or 1) do
-        sendPacketRaw(false, { type = 3, state = 2592, value = 18, px = x, py = y, x = px, y = py })
-        Sleep(10)
-    end
+    sendPacketRaw(false, { type = 3, state = 2592, value = 18, x = x, y = y, px = px, py = py })
+    Sleep(10)
 end
 
 function trh1_3(x, y, id)
     if not EnablePlace then return end
     local px, py = getLocalPos()
-    sendPacketRaw(false, { type = 3, value = id, px = x, py = y, x = px, y = py })
+    sendPacketRaw(false, { type = 3, value = id, x = x, y = y, px = px, py = py })
 end
 
 function sdtr_11(object)
@@ -206,7 +192,7 @@ function sdt_11(range)
         if object and math.abs(localPlayer.posX - object.posX) <= (32 * range) and
            math.abs(localPlayer.posY - object.posY) < (32 * range) and inv(object.itemid) < 200 then
             sdtr_11(object)
-            Sleep(15)
+            Sleep(120)
         end
     end
 end
@@ -220,7 +206,7 @@ function sdt_11_target(targetID, range)
            math.abs(localPlayer.posX - object.posX) <= (32 * range) and
            math.abs(localPlayer.posY - object.posY) < (32 * range) and inv(object.itemid) < 200 then
             sdtr_11(object)
-            Sleep(15)
+            Sleep(120)
         end
     end
 end
@@ -245,7 +231,8 @@ end
 
 function ensureSetupItems()
     if not autoDF_running then return end
-    if inv(WorldLockID) == 0 or inv(EntranceID) == 0 then
+    -- Cek ketersediaan Entrance minimal 2 biji untuk dipasang di kiri dan kanan
+    if inv(WorldLockID) == 0 or inv(EntranceID) < 2 then
         LogToConsole("`w[`0Setup`w] Item WL/Entrance kurang, mengambil ke Storage...")
         local currentWorld = safeGetWorldName()
         if currentWorld == "" then return end
@@ -259,7 +246,7 @@ function ensureSetupItems()
         end
 
         warp(targetStorageWorld, targetStorageDoor)
-        Sleep(4000)
+        Sleep(6000)
 
         for _, object in pairs(safeGetObjectList()) do
             if not autoDF_running then return end
@@ -268,14 +255,14 @@ function ensureSetupItems()
                 Sleep(500)
                 sdtr_11(object)
                 Sleep(500)
-                if inv(WorldLockID) > 0 and inv(EntranceID) > 0 then
+                if inv(WorldLockID) > 0 and inv(EntranceID) >= 2 then
                     break
                 end
             end
         end
 
         warp(currentWorld, "")
-        Sleep(4000)
+        Sleep(6000)
     end
 end
 
@@ -292,21 +279,54 @@ function setupNewRandomWorld()
     local doorX, doorY = findMainDoor()
     LogToConsole("`w[`0Setup`w] Memasang WL dan Entrance di sekitar Main Door...")
 
+    -- 1. Pasang World Lock di Atas Main Door
     if inv(WorldLockID) > 0 and safeTile(doorX, doorY - 1).fg == 0 then
         FindPath(doorX, doorY)
         Sleep(500)
-        trh1_3(doorX, doorY - 1, WorldLockID)
-        Sleep(1000)
+        local timeout = 0
+        while safeTile(doorX, doorY - 1).fg == 0 and inv(WorldLockID) > 0 and autoDF_running and timeout < 10 do
+            trh1_3(doorX, doorY - 1, WorldLockID)
+            Sleep(dpc)
+            timeout = timeout + 1
+        end
+        Sleep(500)
     end
 
-    if inv(EntranceID) > 0 then
-        if safeTile(doorX - 1, doorY).fg == 0 then
-            trh1_3(doorX - 1, doorY, EntranceID)
-            Sleep(500)
+    -- 2. Pasang Entrance di Kiri dan Kanan Main Door
+    local sidePositions = { doorX - 1, doorX + 1 }
+
+    for _, targetX in ipairs(sidePositions) do
+        if not autoDF_running then break end
+
+        -- Hancurkan penghalang jika ada block di samping door
+        if safeTile(targetX, doorY).fg ~= 0 and safeTile(targetX, doorY).fg ~= EntranceID then
+            FindPath(doorX, doorY)
+            Sleep(300)
+            local timeout = 0
+            while safeTile(targetX, doorY).fg ~= 0 and autoDF_running and timeout < 20 do
+                tnjk1_3(targetX, doorY)
+                Sleep(dbk)
+                timeout = timeout + 1
+            end
         end
-        if safeTile(doorX + 1, doorY).fg == 0 then
-            trh1_3(doorX + 1, doorY, EntranceID)
-            Sleep(500)
+
+        -- Pasang pijakan jika melayang
+        if safeTile(targetX, doorY + 1).fg == 0 and inv(2) > 0 then
+            trh1_3(targetX, doorY + 1, 2)
+            Sleep(dpc)
+        end
+
+        -- Pasang Entrance
+        if inv(EntranceID) > 0 and safeTile(targetX, doorY).fg ~= EntranceID then
+            FindPath(doorX, doorY)
+            Sleep(300)
+            local timeout = 0
+            while safeTile(targetX, doorY).fg ~= EntranceID and inv(EntranceID) > 0 and autoDF_running and timeout < 10 do
+                trh1_3(targetX, doorY, EntranceID)
+                Sleep(dpc)
+                timeout = timeout + 1
+            end
+            Sleep(300)
         end
     end
 
@@ -318,44 +338,44 @@ function processAutoDropAndTrash()
     local currentWorld = safeGetWorldName()
     if currentWorld == "" then return end
 
-    -- 1. Drop Sampah ke Trash World
+    -- 1. Drop Sampah dengan Koordinat Spesifik per ID
     if TrashWorldEnabled and TrashWorld ~= "" then
-        local trashIDs = getTrashIDList()
-        for _, trashID in ipairs(trashIDs) do
+        local trashMap = parseCoordMap(CustomTrashCoords)
+        for trashID, pos in pairs(trashMap) do
             if not autoDF_running then return end
             local jmlTrash = inv(trashID)
             if jmlTrash >= MinTrashToDrop then
                 warp(TrashWorld, TrashDoor)
-                Sleep(5000)
-                FindPath(TrashPosX, TrashPosY)
+                Sleep(6000)
+                FindPath(pos.x, pos.y)
                 Sleep(1000)
-                sendPacket(2, "action|drop\n|itemID|" .. trashID)
+                sendPacket(2, "action|drop\nitemID|" .. trashID)
                 Sleep(100)
                 sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. trashID .. "|\ncount|" .. jmlTrash)
                 Sleep(2000)
                 warp(currentWorld, "")
-                Sleep(5000)
+                Sleep(6000)
             end
         end
     end
 
-    -- 2. Drop Item Utama/Seed
+    -- 2. Drop Item Utama/Seed dengan Koordinat Spesifik per ID
     if AutoDropEnabled and DropWorld ~= "" then
-        local dropIDs = getDropIDList()
-        for _, id in pairs(dropIDs) do
+        local dropMap = parseCoordMap(CustomDropCoords)
+        for id, pos in pairs(dropMap) do
             if not autoDF_running then return end
             local jml = inv(id)
             if jml >= MinToDrop then
                 warp(DropWorld, DropDoor)
-                Sleep(5000)
-                FindPath(DropPosX, DropPosY)
+                Sleep(6000)
+                FindPath(pos.x, pos.y)
                 Sleep(1000)
-                sendPacket(2, "action|drop\n|itemID|" .. id)
+                sendPacket(2, "action|drop\nitemID|" .. id)
                 Sleep(100)
                 sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. id .. "|\ncount|" .. jml)
                 Sleep(2000)
                 warp(currentWorld, "")
-                Sleep(5000)
+                Sleep(6000)
             end
         end
     end
@@ -363,34 +383,9 @@ end
 
 function processAutoPick()
     if not AutoPickEnabled or not autoDF_running then return end
-    local currentWorld = safeGetWorldName()
 
     if AutoFind_Enabled then
         sdt_11(10)
-    end
-
-    if PickDoor_Enabled and PickDoor_ID > 0 and PickDoor_World ~= "" then
-        if currentWorld ~= PickDoor_World then
-            warp(PickDoor_World, PickDoor_Door)
-            Sleep(4000)
-        end
-        sdt_11_target(PickDoor_ID, 10)
-    end
-
-    if PickWL_Enabled and PickWL_ID > 0 and PickWL_World ~= "" then
-        if currentWorld ~= PickWL_World then
-            warp(PickWL_World, PickWL_Door)
-            Sleep(4000)
-        end
-        sdt_11_target(PickWL_ID, 10)
-    end
-
-    if PickPlat_Enabled and PickPlat_ID > 0 and PickPlat_World ~= "" then
-        if currentWorld ~= PickPlat_World then
-            warp(PickPlat_World, PickPlat_Door)
-            Sleep(4000)
-        end
-        sdt_11_target(PickPlat_ID, 10)
     end
 end
 
@@ -416,7 +411,7 @@ function findEmptyTile(radius)
                     end
                 end
 
-                if tile.fg == 0 and tile.bg == 0 and dropCount == 0 then
+                if tile.fg == 0 and dropCount == 0 then
                     return { x = tx, y = ty }
                 end
             end
@@ -428,17 +423,22 @@ end
 function cekSeed()
     if not autoDF_running then return end
     processAutoDropAndTrash()
-    local dropIDs = getDropIDList()
+    
+    local dropMap = parseCoordMap(CustomDropCoords)
     local needDrop = false
-    for _, id in pairs(dropIDs) do
-        if inv(id) >= 100 then needDrop = true break end
+    
+    for id, _ in pairs(dropMap) do
+        if inv(id) >= 190 then 
+            needDrop = true 
+            break 
+        end
     end
 
-    if needDrop and not AutoDropEnabled then
+    if needDrop and not AutoDropEnabled and worldsaveseed ~= "" and worldsaveseed ~= "PHINIS|DoorID" then
         Sleep(200)
         warp(worldsaveseed, "")
         Sleep(6000)
-        for _, id in pairs(dropIDs) do
+        for id, _ in pairs(dropMap) do
             if not autoDF_running then return end
             local jumlah = inv(id)
             if jumlah >= 100 then
@@ -446,7 +446,7 @@ function cekSeed()
                 if emptyTile ~= nil then
                     FindPath(emptyTile.x, emptyTile.y)
                     Sleep(1000)
-                    sendPacket(2, "action|drop\n|itemID|" .. id)
+                    sendPacket(2, "action|drop\nitemID|" .. id)
                     Sleep(100)
                     sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. id .. "|\ncount|" .. jumlah)
                     Sleep(2000)
@@ -492,7 +492,7 @@ function plfS_15()
     if inv(PlatformID) < 52 then
         Sleep(2000)
         warp(StoragePlatWorld, StoragePlatDoor)
-        Sleep(4000)
+        Sleep(6000)
         
         local attempts = 0
         while inv(PlatformID) < 52 and autoDF_running and attempts < 10 do
@@ -515,7 +515,7 @@ function plfS_15()
         end
         
         warp(nameworld, "")
-        Sleep(4000)
+        Sleep(6000)
     end
 
     for tiley = 2, 52, 2 do
@@ -588,7 +588,7 @@ function brkLv_12()
                 timeout = timeout + 1
             end
             processAutoPick()
-            if safeTile(tile.x, tile.y).fg == 0 and autoDF_running then
+            if safeTile(tile.x, tile.y).fg == 0 and autoDF_running and inv(2) > 0 then
                 trh1_3(tile.x, tile.y, 2)
                 Sleep(dpc)
             end
@@ -630,13 +630,16 @@ function mainDF()
     if not nameworld or nameworld == "" then return end
 
     warp(nameworld, "")
-    Sleep(4000)
+    Sleep(6000)
     LogToConsole("`w[`0Auto DF`w] Masuk world: " .. tostring(nameworld))
     Sleep(2000)
 
     if UseRandomDF then
         local successSetup = setupNewRandomWorld()
-        if not successSetup then return end
+        if not successSetup then 
+            Sleep(3000)
+            return 
+        end
     end
 
     if not autoDF_running then return end
@@ -651,6 +654,11 @@ function mainDF()
     if not autoDF_running then return end
     plcDrt_2()
     if not autoDF_running then return end
+
+    -- Catat hasil ke finished_df.txt
+    writeToLocal("finished_df.txt", os.date("[%Y-%m-%d %H:%M] ") .. nameworld .. "\n")
+    LogToConsole("`w[`2SUCCESS`w] World " .. nameworld .. " selesai & dicatat ke finished_df.txt!")
+
     sendPacket(2, "action|respawn")
     Sleep(3000)
 end
@@ -850,7 +858,7 @@ local module_json = [[
                 {
                     "type": "input_int",
                     "text": "Delay Break",
-                    "default": "180",
+                    "default": "220",
                     "label": "ms",
                     "placeholder": "millisecond",
                     "icon": "Verified",
@@ -859,7 +867,7 @@ local module_json = [[
                 {
                     "type": "input_int",
                     "text": "Delay Place",
-                    "default": "80",
+                    "default": "120",
                     "label": "ms",
                     "placeholder": "millisecond",
                     "icon": "Verified",
@@ -898,24 +906,6 @@ local module_json = [[
                     "alias": "min_to_drop"
                 },
                 {
-                    "type": "input_int",
-                    "text": "Position x block",
-                    "default": "26",
-                    "label": "X",
-                    "placeholder": "X coordinate",
-                    "icon": "Verified",
-                    "alias": "drop_pos_x"
-                },
-                {
-                    "type": "input_int",
-                    "text": "Position y block",
-                    "default": "11",
-                    "label": "Y",
-                    "placeholder": "Y coordinate",
-                    "icon": "Verified",
-                    "alias": "drop_pos_y"
-                },
-                {
                     "type": "input_string",
                     "text": "World to drop",
                     "default": "SDZRR",
@@ -931,10 +921,10 @@ local module_json = [[
                 },
                 {
                     "type": "input_string",
-                    "text": "Custom Drop IDs",
-                    "default": "3, 15, 5, 11",
+                    "text": "Drop Coords (ID:X:Y)",
+                    "default": "3:26:11, 15:28:11, 5:30:11, 11:32:11",
                     "icon": "Edit",
-                    "alias": "custom_drop_ids"
+                    "alias": "custom_drop_coords"
                 }
             ]
         },
@@ -963,24 +953,6 @@ local module_json = [[
                     "alias": "min_trash_drop"
                 },
                 {
-                    "type": "input_int",
-                    "text": "Trash X block",
-                    "default": "26",
-                    "label": "X",
-                    "placeholder": "X coordinate",
-                    "icon": "Verified",
-                    "alias": "trash_pos_x"
-                },
-                {
-                    "type": "input_int",
-                    "text": "Trash Y block",
-                    "default": "11",
-                    "label": "Y",
-                    "placeholder": "Y coordinate",
-                    "icon": "Verified",
-                    "alias": "trash_pos_y"
-                },
-                {
                     "type": "input_string",
                     "text": "Trash World Name",
                     "default": "TRASHWORLD",
@@ -996,10 +968,10 @@ local module_json = [[
                 },
                 {
                     "type": "input_string",
-                    "text": "Custom Trash IDs",
-                    "default": "4, 10, 14",
+                    "text": "Trash Coords (ID:X:Y)",
+                    "default": "4:35:11, 10:37:11, 14:39:11",
                     "icon": "Edit",
-                    "alias": "custom_trash_ids"
+                    "alias": "custom_trash_coords"
                 }
             ]
         },
@@ -1157,19 +1129,15 @@ function onValue(type_evt, name, value)
     
     elseif name == "autodrop_toggle" then AutoDropEnabled = value
     elseif name == "min_to_drop" then MinToDrop = tonumber(value) or 190
-    elseif name == "drop_pos_x" then DropPosX = tonumber(value) or 26
-    elseif name == "drop_pos_y" then DropPosY = tonumber(value) or 11
     elseif name == "drop_world" then DropWorld = tostring(value)
     elseif name == "drop_door" then DropDoor = tostring(value)
-    elseif name == "custom_drop_ids" then CustomDropIDs = tostring(value)
+    elseif name == "custom_drop_coords" then CustomDropCoords = tostring(value)
 
     elseif name == "trash_world_toggle" then TrashWorldEnabled = value
     elseif name == "min_trash_drop" then MinTrashToDrop = tonumber(value) or 50
-    elseif name == "trash_pos_x" then TrashPosX = tonumber(value) or 26
-    elseif name == "trash_pos_y" then TrashPosY = tonumber(value) or 11
     elseif name == "trash_world" then TrashWorld = tostring(value)
     elseif name == "trash_door" then TrashDoor = tostring(value)
-    elseif name == "custom_trash_ids" then CustomTrashIDs = tostring(value)
+    elseif name == "custom_trash_coords" then CustomTrashCoords = tostring(value)
     
     elseif name == "autopick_toggle" then AutoPickEnabled = value
     elseif name == "autofind_toggle" then AutoFind_Enabled = value
