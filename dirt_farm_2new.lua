@@ -174,24 +174,46 @@ function inv(itemID)
     return 0
 end
 
-local function getLocalPos()
+-- Fungsi Jalan Pintar (Menunggu Karakter Tiba Sebelum Aksi)
+function walkTo(targetX, targetY, timeoutMs)
+    timeoutMs = timeoutMs or 3000
     local p = getLocal()
-    if not p then return 0, 0 end
-    return p.posX or 0, p.posY or 0
+    if not p or not p.posX or not p.posY then return false end
+
+    local curX = p.posX // 32
+    local curY = p.posY // 32
+
+    -- Jika sudah berada di jarak aman (<= 3 tile), langsung anggap sukses
+    if math.abs(curX - targetX) <= 3 and math.abs(curY - targetY) <= 3 then
+        return true
+    end
+
+    FindPath(targetX, targetY)
+
+    local elapsed = 0
+    while autoDF_running and elapsed < timeoutMs do
+        Sleep(100)
+        elapsed = elapsed + 100
+        local pl = getLocal()
+        if pl and pl.posX and pl.posY then
+            local px = pl.posX // 32
+            local py = pl.posY // 32
+            if math.abs(px - targetX) <= 3 and math.abs(py - targetY) <= 3 then
+                return true
+            end
+        end
+    end
+    return false
 end
 
--- Filter Jarak <= 4 Tile (Mencegah Warning GL Avoid Bannable Packet)
+-- Pukulan Aman dengan Validasi Jarak & Movement Synchronizer
 function tnjk1_3(x, y)
-    if not EnableBreak then return end
+    if not EnableBreak or not autoDF_running then return end
+    
+    if not walkTo(x, y, 3000) then return end
+
     local p = getLocal()
     if not p or not p.posX or not p.posY then return end
-
-    local pxTile = p.posX // 32
-    local pyTile = p.posY // 32
-
-    if math.abs(pxTile - x) > 4 or math.abs(pyTile - y) > 4 then
-        return
-    end
 
     local px, py = p.posX, p.posY
     for i = 1, (HitCount or 1) do
@@ -200,17 +222,14 @@ function tnjk1_3(x, y)
     end
 end
 
+-- Pemasangan Aman dengan Validasi Jarak & Movement Synchronizer
 function trh1_3(x, y, id)
-    if not EnablePlace then return end
+    if not EnablePlace or not autoDF_running then return end
+    
+    if not walkTo(x, y, 3000) then return end
+
     local p = getLocal()
     if not p or not p.posX or not p.posY then return end
-
-    local pxTile = p.posX // 32
-    local pyTile = p.posY // 32
-
-    if math.abs(pxTile - x) > 4 or math.abs(pyTile - y) > 4 then
-        return
-    end
 
     local px, py = p.posX, p.posY
     sendPacketRaw(false, { type = 3, value = id, x = x, y = y, px = px, py = py })
@@ -239,20 +258,6 @@ function sdt_11(range)
     end
 end
 
-function sdt_11_target(targetID, range)
-    local localPlayer = getLocal()
-    if not localPlayer then return end
-
-    for _, object in pairs(safeGetObjectList()) do
-        if object and object.itemid == targetID and
-           math.abs(localPlayer.posX - object.posX) <= (32 * range) and
-           math.abs(localPlayer.posY - object.posY) < (32 * range) and inv(object.itemid) < 200 then
-            sdtr_11(object)
-            Sleep(120)
-        end
-    end
-end
-
 function hasWorldLock()
     for _, tile in pairs(safeGetTiles()) do
         if tile and (tile.fg == WorldLockID or tile.bg == WorldLockID) then
@@ -271,11 +276,9 @@ function findMainDoor()
     return 50, 29
 end
 
--- Pengecekan Stok WL/Entrance dengan Jeda Sync Inventoris
 function ensureSetupItems()
     if not autoDF_running then return end
 
-    -- Jeda sync inventoris setelah warp agar data tas terisi penuh dari server
     if #safeGetInventory() == 0 then
         Sleep(1500)
     end
@@ -302,7 +305,7 @@ function ensureSetupItems()
         for _, object in pairs(safeGetObjectList()) do
             if not autoDF_running then return end
             if object and (object.itemid == WorldLockID or object.itemid == EntranceID) then
-                FindPath(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
+                walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 3000)
                 Sleep(500)
                 sdtr_11(object)
                 Sleep(500)
@@ -331,7 +334,7 @@ function setupNewRandomWorld()
     LogToConsole("`w[`0Setup`w] Memasang WL dan Entrance di sekitar Main Door...")
 
     if inv(WorldLockID) > 0 and safeTile(doorX, doorY - 1).fg == 0 then
-        FindPath(doorX, doorY)
+        walkTo(doorX, doorY, 3000)
         Sleep(500)
         local timeout = 0
         while safeTile(doorX, doorY - 1).fg == 0 and inv(WorldLockID) > 0 and autoDF_running and timeout < 10 do
@@ -348,7 +351,7 @@ function setupNewRandomWorld()
         if not autoDF_running then break end
 
         if safeTile(targetX, doorY).fg ~= 0 and safeTile(targetX, doorY).fg ~= EntranceID then
-            FindPath(doorX, doorY)
+            walkTo(doorX, doorY, 3000)
             Sleep(300)
             local timeout = 0
             while safeTile(targetX, doorY).fg ~= 0 and autoDF_running and timeout < 20 do
@@ -364,7 +367,7 @@ function setupNewRandomWorld()
         end
 
         if inv(EntranceID) > 0 and safeTile(targetX, doorY).fg ~= EntranceID then
-            FindPath(doorX, doorY)
+            walkTo(doorX, doorY, 3000)
             Sleep(300)
             local timeout = 0
             while safeTile(targetX, doorY).fg ~= EntranceID and inv(EntranceID) > 0 and autoDF_running and timeout < 10 do
@@ -392,7 +395,7 @@ function processAutoDropAndTrash()
             if jmlTrash >= MinTrashToDrop then
                 warp(TrashWorld, TrashDoor)
                 Sleep(6000)
-                FindPath(pos.x, pos.y)
+                walkTo(pos.x, pos.y, 4000)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. trashID)
                 Sleep(100)
@@ -412,7 +415,7 @@ function processAutoDropAndTrash()
             if jml >= MinToDrop then
                 warp(DropWorld, DropDoor)
                 Sleep(6000)
-                FindPath(pos.x, pos.y)
+                walkTo(pos.x, pos.y, 4000)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. id)
                 Sleep(100)
@@ -427,7 +430,6 @@ end
 
 function processAutoPick()
     if not AutoPickEnabled or not autoDF_running then return end
-
     if AutoFind_Enabled then
         sdt_11(10)
     end
@@ -488,7 +490,7 @@ function cekSeed()
             if jumlah >= 100 then
                 local emptyTile = findEmptyTile(5)
                 if emptyTile ~= nil then
-                    FindPath(emptyTile.x, emptyTile.y)
+                    walkTo(emptyTile.x, emptyTile.y, 4000)
                     Sleep(1000)
                     sendPacket(2, "action|drop\nitemID|" .. id)
                     Sleep(100)
@@ -507,8 +509,7 @@ function smpng_12()
         for tiley = 24, 53 do
             if not autoDF_running then return end
             if safeTile(column, tiley).bg == 14 or safeTile(column + 1, tiley).bg == 14 then
-                FindPath(column, tiley - 1)
-                Sleep(1000)
+                walkTo(column, tiley - 1, 4000)
                 local timeout = 0
                 while (safeTile(column, tiley).bg == 14 and autoDF_running and timeout < 20) do
                     tnjk1_3(column, tiley)
@@ -545,7 +546,7 @@ function plfS_15()
                 if not autoDF_running then return end
                 if object and object.itemid == PlatformID then
                     foundAny = true
-                    FindPath(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
+                    walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 3000)
                     Sleep(1000)
                     sdtr_11(object)
                     Sleep(500)
@@ -565,7 +566,7 @@ function plfS_15()
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if safeTile(1, tiley).fg == 0 then
-            FindPath(0, tiley)
+            walkTo(0, tiley, 3000)
             Sleep(200)
             local timeout = 0
             while safeTile(1, tiley).fg == 0 and autoDF_running and timeout < 10 do
@@ -579,7 +580,7 @@ function plfS_15()
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if safeTile(98, tiley).fg == 0 then
-            FindPath(99, tiley)
+            walkTo(99, tiley, 3000)
             Sleep(200)
             local timeout = 0
             while safeTile(98, tiley).fg == 0 and autoDF_running and timeout < 10 do
@@ -601,7 +602,7 @@ function clrd_down_15()
         for tilex = 2, 97, 1 do
             if not autoDF_running then return end
             if safeTile(tilex, tiley - 2).bg ~= 0 or safeTile(tilex, tiley).bg ~= 0 or safeTile(tilex, tiley + 2).bg ~= 0 then
-                FindPath(tilex - 1, tiley)
+                walkTo(tilex - 1, tiley, 3000)
                 Sleep(200)
                 for i = -2, 2, 2 do
                     local timeout = 0
@@ -623,7 +624,7 @@ function brkLv_12()
     for _, tile in pairs(safeGetTiles()) do
         if not autoDF_running then return end
         if tile and tile.fg == 4 then
-            FindPath(tile.x, tile.y - 1)
+            walkTo(tile.x, tile.y - 1, 3000)
             Sleep(200)
             local timeout = 0
             while safeTile(tile.x, tile.y).fg == 4 and autoDF_running and timeout < 20 do
@@ -640,13 +641,12 @@ function brkLv_12()
     end
 end
 
--- Re-check Retry untuk Pasang Dirt (Anti Hole/Bolong)
 function plcDrt_2()
     for tiley = 24, 2, -2 do
         if not autoDF_running then return end
         for tilex = 4, 98, 5 do
             if not autoDF_running then return end
-            FindPath(tilex, tiley + 1)
+            walkTo(tilex, tiley + 1, 3000)
             Sleep(300)
             for i = 1, 5 do
                 local tx = (tilex - 3) + i
@@ -670,7 +670,6 @@ function isWorldAlreadyDone()
     return true
 end
 
--- Emergency Stop Handler
 function StopAll()
     autoDF_running = false
     pcall(function()
@@ -1221,7 +1220,7 @@ function onValue(type_evt, name, value)
     elseif name == "custom_trash_coords" then CustomTrashCoords = tostring(value)
     
     elseif name == "autopick_toggle" then AutoPickEnabled = value
-    elseif name == "autofind_toggle" then AutoFind_Enabled = value
+    elseif name == "autofind_toggle" me AutoFind_Enabled = value
     
     elseif name == "pick_door_toggle" then PickDoor_Enabled = value
     elseif name == "pick_door_world" then PickDoor_World = tostring(value)
