@@ -41,6 +41,9 @@ EnablePlace = true
 HitCount = 1
 VerifyPunch = false
 
+-- State Non-Random World Door ID
+DFWorldDoor = ""
+
 -- State Auto Drop Setting (Format ID:X:Y)
 AutoDropEnabled = false
 MinToDrop = 190
@@ -148,6 +151,16 @@ function warp(worldName, doorId)
     return true
 end
 
+-- Wrapper Warp Cerdas (Mendukung WORLD|DOOR dan Input Door UI)
+function warpDFWorld(worldEntry)
+    if not worldEntry or worldEntry == "" then return false end
+    local wName, dId = worldEntry:match("([^|]+)|?(.*)")
+    if (dId == nil or dId == "") and DFWorldDoor ~= "" and not UseRandomDF then
+        dId = DFWorldDoor
+    end
+    return warp(wName, dId)
+end
+
 function inv(itemID)
     for _, item in pairs(safeGetInventory()) do
         if item and item.id == itemID then return item.amount end
@@ -161,16 +174,39 @@ local function getLocalPos()
     return p.posX or 0, p.posY or 0
 end
 
+-- Filter Jarak <= 4 Tile (Mencegah Warning GL Avoid Bannable Packet)
 function tnjk1_3(x, y)
     if not EnableBreak then return end
-    local px, py = getLocalPos()
-    sendPacketRaw(false, { type = 3, state = 2592, value = 18, x = x, y = y, px = px, py = py })
-    Sleep(10)
+    local p = getLocal()
+    if not p or not p.posX or not p.posY then return end
+
+    local pxTile = p.posX // 32
+    local pyTile = p.posY // 32
+
+    if math.abs(pxTile - x) > 4 or math.abs(pyTile - y) > 4 then
+        return
+    end
+
+    local px, py = p.posX, p.posY
+    for i = 1, (HitCount or 1) do
+        sendPacketRaw(false, { type = 3, state = 2592, value = 18, x = x, y = y, px = px, py = py })
+        Sleep(10)
+    end
 end
 
 function trh1_3(x, y, id)
     if not EnablePlace then return end
-    local px, py = getLocalPos()
+    local p = getLocal()
+    if not p or not p.posX or not p.posY then return end
+
+    local pxTile = p.posX // 32
+    local pyTile = p.posY // 32
+
+    if math.abs(pxTile - x) > 4 or math.abs(pyTile - y) > 4 then
+        return
+    end
+
+    local px, py = p.posX, p.posY
     sendPacketRaw(false, { type = 3, value = id, x = x, y = y, px = px, py = py })
 end
 
@@ -231,7 +267,6 @@ end
 
 function ensureSetupItems()
     if not autoDF_running then return end
-    -- Cek ketersediaan Entrance minimal 2 biji untuk dipasang di kiri dan kanan
     if inv(WorldLockID) == 0 or inv(EntranceID) < 2 then
         LogToConsole("`w[`0Setup`w] Item WL/Entrance kurang, mengambil ke Storage...")
         local currentWorld = safeGetWorldName()
@@ -261,7 +296,7 @@ function ensureSetupItems()
             end
         end
 
-        warp(currentWorld, "")
+        warpDFWorld(currentWorld)
         Sleep(6000)
     end
 end
@@ -279,7 +314,6 @@ function setupNewRandomWorld()
     local doorX, doorY = findMainDoor()
     LogToConsole("`w[`0Setup`w] Memasang WL dan Entrance di sekitar Main Door...")
 
-    -- 1. Pasang World Lock di Atas Main Door
     if inv(WorldLockID) > 0 and safeTile(doorX, doorY - 1).fg == 0 then
         FindPath(doorX, doorY)
         Sleep(500)
@@ -292,13 +326,11 @@ function setupNewRandomWorld()
         Sleep(500)
     end
 
-    -- 2. Pasang Entrance di Kiri dan Kanan Main Door
     local sidePositions = { doorX - 1, doorX + 1 }
 
     for _, targetX in ipairs(sidePositions) do
         if not autoDF_running then break end
 
-        -- Hancurkan penghalang jika ada block di samping door
         if safeTile(targetX, doorY).fg ~= 0 and safeTile(targetX, doorY).fg ~= EntranceID then
             FindPath(doorX, doorY)
             Sleep(300)
@@ -310,13 +342,11 @@ function setupNewRandomWorld()
             end
         end
 
-        -- Pasang pijakan jika melayang
         if safeTile(targetX, doorY + 1).fg == 0 and inv(2) > 0 then
             trh1_3(targetX, doorY + 1, 2)
             Sleep(dpc)
         end
 
-        -- Pasang Entrance
         if inv(EntranceID) > 0 and safeTile(targetX, doorY).fg ~= EntranceID then
             FindPath(doorX, doorY)
             Sleep(300)
@@ -338,7 +368,6 @@ function processAutoDropAndTrash()
     local currentWorld = safeGetWorldName()
     if currentWorld == "" then return end
 
-    -- 1. Drop Sampah dengan Koordinat Spesifik per ID
     if TrashWorldEnabled and TrashWorld ~= "" then
         local trashMap = parseCoordMap(CustomTrashCoords)
         for trashID, pos in pairs(trashMap) do
@@ -353,13 +382,12 @@ function processAutoDropAndTrash()
                 Sleep(100)
                 sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. trashID .. "|\ncount|" .. jmlTrash)
                 Sleep(2000)
-                warp(currentWorld, "")
+                warpDFWorld(currentWorld)
                 Sleep(6000)
             end
         end
     end
 
-    -- 2. Drop Item Utama/Seed dengan Koordinat Spesifik per ID
     if AutoDropEnabled and DropWorld ~= "" then
         local dropMap = parseCoordMap(CustomDropCoords)
         for id, pos in pairs(dropMap) do
@@ -374,7 +402,7 @@ function processAutoDropAndTrash()
                 Sleep(100)
                 sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. id .. "|\ncount|" .. jml)
                 Sleep(2000)
-                warp(currentWorld, "")
+                warpDFWorld(currentWorld)
                 Sleep(6000)
             end
         end
@@ -453,7 +481,7 @@ function cekSeed()
                 end
             end
         end
-        warp(nameworld, "")
+        warpDFWorld(nameworld)
         Sleep(6000)
     end
 end
@@ -514,7 +542,7 @@ function plfS_15()
             Sleep(1000)
         end
         
-        warp(nameworld, "")
+        warpDFWorld(nameworld)
         Sleep(6000)
     end
 
@@ -596,6 +624,7 @@ function brkLv_12()
     end
 end
 
+-- Re-check Retry untuk Pasang Dirt
 function plcDrt_2()
     for tiley = 24, 2, -2 do
         if not autoDF_running then return end
@@ -606,11 +635,11 @@ function plcDrt_2()
             for i = 1, 5 do
                 local tx = (tilex - 3) + i
                 if tx <= 98 and safeTile(tx, tiley).fg == 0 then
-                    local timeout = 0
-                    while safeTile(tx, tiley).fg == 0 and inv(2) > 0 and autoDF_running and timeout < 10 do
+                    local retry = 0
+                    while safeTile(tx, tiley).fg == 0 and inv(2) > 0 and autoDF_running and retry < 5 do
                         trh1_3(tx, tiley, 2)
                         Sleep(dpc)
-                        timeout = timeout + 1
+                        retry = retry + 1
                     end
                 end
             end
@@ -625,11 +654,21 @@ function isWorldAlreadyDone()
     return true
 end
 
+-- Emergency Stop Handler
+function StopAll()
+    autoDF_running = false
+    pcall(function()
+        sendPacket(2, "action|input\n|left|0\n|right|0\n|up|0\n|down|0")
+        sendPacket(2, "action|input\n|space|0")
+    end)
+    LogToConsole("`w[`0Auto DF`w]`4 STOP DITEKAN! Pergerakan & pengerjaan dihentikan.")
+end
+
 function mainDF()
     if not autoDF_running then return end
     if not nameworld or nameworld == "" then return end
 
-    warp(nameworld, "")
+    warpDFWorld(nameworld)
     Sleep(6000)
     LogToConsole("`w[`0Auto DF`w] Masuk world: " .. tostring(nameworld))
     Sleep(2000)
@@ -655,7 +694,6 @@ function mainDF()
     plcDrt_2()
     if not autoDF_running then return end
 
-    -- Catat hasil ke finished_df.txt
     writeToLocal("finished_df.txt", os.date("[%Y-%m-%d %H:%M] ") .. nameworld .. "\n")
     LogToConsole("`w[`2SUCCESS`w] World " .. nameworld .. " selesai & dicatat ke finished_df.txt!")
 
@@ -807,6 +845,13 @@ local module_json = [[
                     "alias": "autodf_worldlist"
                 },
                 {
+                    "type": "input_string",
+                    "text": "List World Door ID (Opsional)",
+                    "default": "",
+                    "icon": "Edit",
+                    "alias": "autodf_worlddoor"
+                },
+                {
                     "type": "toggle",
                     "text": "Random World (Auto DF)",
                     "default": false,
@@ -880,6 +925,12 @@ local module_json = [[
             "text": "Start Autofarm",
             "default": false,
             "alias": "btn_autodf"
+        },
+        {
+            "type": "toggle",
+            "text": "📍 Cek Posisi Saya Sekarang (Console Log)",
+            "default": false,
+            "alias": "toggle_pos_check"
         },
         {
             "type": "divider"
@@ -1117,6 +1168,7 @@ function onValue(type_evt, name, value)
             Config.World.nameworld = worlds 
             if index_world > #Config.World.nameworld then index_world = 1 end
         end
+    elseif name == "autodf_worlddoor" then DFWorldDoor = tostring(value)
     elseif name == "autodf_use_random" then UseRandomDF = value
     elseif name == "rand_length" then RandLength = tonumber(value) or 5
     elseif name == "rand_with_number" then RandWithNumber = value
@@ -1127,6 +1179,19 @@ function onValue(type_evt, name, value)
     elseif name == "autodf_delaybreak" then dbk = tonumber(value) or dbk
     elseif name == "autodf_delayplace" then dpc = tonumber(value) or dpc
     
+    elseif name == "toggle_pos_check" then
+        if value then
+            local p = getLocal()
+            if p and p.posX and p.posY then
+                local tx = p.posX // 32
+                local ty = p.posY // 32
+                local t = safeTile(tx, ty)
+                LogToConsole("`w[`0POSISI REALTIME`w] `2X=" .. tx .. " Y=" .. ty .. " | FG=" .. t.fg .. " BG=" .. t.bg)
+            else
+                LogToConsole("`4[`0Error`4] Posisi player tidak ditemukan!")
+            end
+        end
+
     elseif name == "autodrop_toggle" then AutoDropEnabled = value
     elseif name == "min_to_drop" then MinToDrop = tonumber(value) or 190
     elseif name == "drop_world" then DropWorld = tostring(value)
@@ -1164,7 +1229,7 @@ function onValue(type_evt, name, value)
         if value == true then
             LogToConsole("`w[`0Auto DF`w] Konfigurasi aman & siap dikerjakan!")
         else
-            LogToConsole("`w[`0Auto DF`w] Autofarm dihentikan.")
+            StopAll()
         end
     end
 end
