@@ -12,7 +12,7 @@ worldsaveseedDoor = "12345"
 dpc = 120 -- Delay Place (ms)
 dbk = 220 -- Delay Break (ms)
 
--- Single Source of Truth variabel Platform & Lock
+-- Single Source of Truth variabel Platform & Lock (Angka Murni)
 PlatformID = 1324
 StoragePlatWorld = "PLATSAVEHAM"
 StoragePlatDoor = "12345"
@@ -79,7 +79,8 @@ math.randomseed(os.time())
 
 -- Filter Blok & Lock yang Tidak Bisa Dihancurkan
 local function isUnbreakable(fg)
-    return fg == 8 or fg == 6 or fg == 242 or fg == 202 or fg == 204 or fg == 206 or fg == 2408 or fg == 4994 or fg == 1790
+    local id = tonumber(fg) or 0
+    return id == 8 or id == 6 or id == 242 or id == 202 or id == 204 or id == 206 or id == 2408 or id == 4994 or id == 1790
 end
 
 -- Parser Koordinat Presisi (Format: ID:X:Y)
@@ -88,7 +89,7 @@ local function parseCoordMap(str)
     for entry in tostring(str):gmatch("[^,%s]+") do
         local id, x, y = entry:match("(%d+):(%d+):(%d+)")
         if id and x and y then
-            map[tonumber(id)] = { x = tonumber(x), y = tonumber(y) }
+            map[math.floor(tonumber(id))] = { x = math.floor(tonumber(x)), y = math.floor(tonumber(y)) }
         end
     end
     return map
@@ -137,7 +138,6 @@ local function safeGetTiles()
     return {}
 end
 
--- Penunggu Otomatis Loading Data Tile World
 local function waitForTilesToLoad()
     local timeout = 0
     while autoDF_running and timeout < 20 do
@@ -173,11 +173,12 @@ function warpDFWorld(worldEntry)
 end
 
 function inv(itemID)
+    local targetID = math.floor(tonumber(itemID) or 0)
     for _, item in pairs(safeGetInventory()) do
         if item then
-            local id = item.id or item.itemid or item.item_id
-            if id == itemID then 
-                return item.amount or item.count or 0 
+            local id = math.floor(tonumber(item.id or item.itemid or item.item_id) or 0)
+            if id == targetID then 
+                return math.floor(tonumber(item.amount or item.count or 0) or 0)
             end
         end
     end
@@ -221,7 +222,7 @@ function walkTo(targetX, targetY, maxWaitMs)
     return false
 end
 
--- Pukulan Presisi (px/py = Target, x/y = Player Pos)
+-- Pukulan Presisi
 function tnjk1_3(x, y)
     if not EnableBreak or not autoDF_running then return false end
     
@@ -242,8 +243,8 @@ function tnjk1_3(x, y)
     packet.type = 3
     packet.state = 2592
     packet.value = 18
-    packet.px = x
-    packet.py = y
+    packet.px = math.floor(x)
+    packet.py = math.floor(y)
     packet.x = p.posX
     packet.y = p.posY
 
@@ -254,10 +255,12 @@ function tnjk1_3(x, y)
     return true
 end
 
--- Pemasangan Presisi (px/py = Target, x/y = Player Pos)
 function trh1_3(x, y, id)
     if not EnablePlace or not autoDF_running then return false end
     
+    local itemRealID = math.floor(tonumber(id) or 0)
+    if itemRealID <= 0 then return false end
+
     local p = getLocal()
     if not p or not p.posX or not p.posY then return false end
 
@@ -273,9 +276,9 @@ function trh1_3(x, y, id)
 
     local packet = {}
     packet.type = 3
-    packet.value = id
-    packet.px = x
-    packet.py = y
+    packet.value = itemRealID
+    packet.px = math.floor(x)
+    packet.py = math.floor(y)
     packet.x = p.posX
     packet.y = p.posY
 
@@ -287,7 +290,7 @@ function sdtr_11(object)
     if not object then return end
     local packet = {}
     packet.type = 11
-    packet.value = object.netid or object.id or 0
+    packet.value = math.floor(tonumber(object.netid or object.id) or 0)
     packet.x = object.posX or object.x or 0
     packet.y = object.posY or object.y or 0
     sendPacketRaw(false, packet)
@@ -299,7 +302,7 @@ function sdt_11(range)
 
     for _, object in pairs(safeGetObjectList()) do
         if object then
-            local itemID = object.itemid or object.type or object.item_id or 0
+            local itemID = math.floor(tonumber(object.itemid or object.type or object.item_id) or 0)
             if math.abs(localPlayer.posX - (object.posX or 0)) <= (32 * range) and
                math.abs(localPlayer.posY - (object.posY or 0)) < (32 * range) and inv(itemID) < 200 then
                 sdtr_11(object)
@@ -361,7 +364,7 @@ function ensureSetupItems()
             for _, object in pairs(safeGetObjectList()) do
                 if not autoDF_running then return end
                 if object then
-                    local itemID = object.itemid or object.type or object.item_id or 0
+                    local itemID = math.floor(tonumber(object.itemid or object.type or object.item_id) or 0)
                     if itemID == WorldLockID or itemID == EntranceID then
                         foundAny = true
                         local targetX = math.max(0, math.floor(((object.posX or 0) + 8) / 32) - 1)
@@ -606,8 +609,8 @@ function ambilSeed(id, jumlah)
             for _, object in pairs(safeGetObjectList()) do
                 if not autoDF_running then return end
                 if object then
-                    local itemID = object.itemid or object.type or object.item_id or 0
-                    if itemID == id then
+                    local itemID = math.floor(tonumber(object.itemid or object.type or object.item_id) or 0)
+                    if itemID == math.floor(tonumber(id) or 0) then
                         foundAny = true
                         local targetX = math.max(0, math.floor(((object.posX or 0) + 8) / 32) - 1)
                         local targetY = math.floor((object.posY or 0) / 32)
@@ -749,11 +752,10 @@ function smpng_12()
     clearSideColumns(98, 99, 99)
 end
 
--- FIXED TOTAL: Menggunakan 1 Variabel Sinkron (StoragePlatWorld, StoragePlatDoor, PlatformID)
 function plfS_15()
     if not autoDF_running or not PickPlat_Enabled then return end
 
-    -- 1. Cek & Restock Platform Jika Kurang Dari 52
+    -- 1. Restock Platform jika kurang dari 52
     if inv(PlatformID) < 52 then
         if StoragePlatWorld == "" then
             LogToConsole("`4[`0Plat Error`4] Nama World Storage Platform belum diisi!")
@@ -772,8 +774,8 @@ function plfS_15()
             for _, object in pairs(safeGetObjectList()) do
                 if not autoDF_running then return end
                 if object then
-                    local itemID = object.itemid or object.type or object.item_id or 0
-                    if itemID == PlatformID then
+                    local itemID = math.floor(tonumber(object.itemid or object.type or object.item_id) or 0)
+                    if itemID == math.floor(tonumber(PlatformID) or 102) then
                         foundAny = true
                         local targetX = math.max(0, math.floor(((object.posX or 0) + 8) / 32) - 1)
                         local targetY = math.floor((object.posY or 0) / 32)
@@ -802,19 +804,21 @@ function plfS_15()
         Sleep(1000)
     end
 
-    -- 2. PROTEKSI KRUSIAL: Jika Plat di backpack tetap 0, JANGAN pasang!
-    if inv(PlatformID) == 0 then
+    -- 2. Proteksi Stok Kosong
+    local currentPlatCount = inv(PlatformID)
+    LogToConsole("`w[`0Auto DF`w] Stok Platform di backpack: `e" .. currentPlatCount)
+    if currentPlatCount == 0 then
         LogToConsole("`4[`0Warning`4] Stok Platform di backpack 0! Pemasangan platform dilewati...")
         return
     end
 
-    -- 3. Pasang Platform Kiri (X = 1)
+    -- 3. Pasang Platform Kiri (Target X=1, Karakter Berdiri di X=0)
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if inv(PlatformID) == 0 then break end
 
         if safeTile(1, tiley).fg == 0 then
-            walkTo(1, tiley, 1500)
+            walkTo(0, tiley, 1500)
             Sleep(200)
             local timeout = 0
             while safeTile(1, tiley).fg == 0 and inv(PlatformID) > 0 and autoDF_running and timeout < 10 do
@@ -825,13 +829,13 @@ function plfS_15()
         end
     end
 
-    -- 4. Pasang Platform Kanan (X = 98)
+    -- 4. Pasang Platform Kanan (Target X=98, Karakter Berdiri di X=99)
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if inv(PlatformID) == 0 then break end
 
         if safeTile(98, tiley).fg == 0 then
-            walkTo(98, tiley, 1500)
+            walkTo(99, tiley, 1500)
             Sleep(200)
             local timeout = 0
             while safeTile(98, tiley).fg == 0 and inv(PlatformID) > 0 and autoDF_running and timeout < 10 do
@@ -854,15 +858,17 @@ function plfS_15()
     end
 end
 
+-- FIXED: Pemukulan Presisi 3 Hitbox (Atas: -2, Tengah: 0, Bawah: +2) dengan Step 2
 function clrd_down_15()
     for tiley = 27, 51, 12 do
         if not autoDF_running then return end
 
+        -- Sapuan Kiri ke Kanan (X=2 s.d. X=97)
         for tilex = 2, 97, 1 do
             if not autoDF_running then return end
             
             local needBreak = false
-            for checkY = -2, 2 do
+            for _, checkY in ipairs({-2, 0, 2}) do
                 local t = safeTile(tilex, tiley + checkY)
                 if (t.fg ~= 0 or t.bg ~= 0) and not isUnbreakable(t.fg) then
                     needBreak = true
@@ -873,7 +879,8 @@ function clrd_down_15()
             if needBreak then
                 walkTo(tilex - 1, tiley, 1500)
                 Sleep(150)
-                for i = -2, 2, 1 do
+                -- Pemukulan Presisi 3 Hitbox (Step 2)
+                for i = -2, 2, 2 do
                     local timeout = 0
                     while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg == 14) 
                           and not isUnbreakable(safeTile(tilex, tiley + i).fg) 
@@ -889,12 +896,13 @@ function clrd_down_15()
             end
         end
 
+        -- Sapuan Kanan ke Kiri (X=97 balik ke X=2)
         if (tiley + 6) <= 53 then
             for tilex = 97, 2, -1 do
                 if not autoDF_running then return end
                 
                 local needBreak = false
-                for checkY = 4, 8 do
+                for _, checkY in ipairs({4, 6, 8}) do
                     local t = safeTile(tilex, tiley + checkY)
                     if (t.fg ~= 0 or t.bg ~= 0) and not isUnbreakable(t.fg) then
                         needBreak = true
@@ -905,7 +913,8 @@ function clrd_down_15()
                 if needBreak then
                     walkTo(tilex + 1, tiley + 6, 1500)
                     Sleep(150)
-                    for i = 4, 8, 1 do
+                    -- Pemukulan Presisi 3 Hitbox (Step 2)
+                    for i = 4, 8, 2 do
                         local timeout = 0
                         while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg == 14) 
                               and not isUnbreakable(safeTile(tilex, tiley + i).fg) 
@@ -1202,7 +1211,7 @@ function handleItemPickerResponse(type_pkt, pkt)
         if type(getItemInfoManager) == "function" then
             local ok, mgr = pcall(getItemInfoManager)
             if ok and mgr and type(mgr.getItemInfoByID) == "function" then
-                itemInfo = mgr:getItemInfoByID(tonumber(pick))
+                itemInfo = mgr:getItemInfoByID(math.floor(tonumber(pick) or 0))
             end
         end
         local nam1 = itemInfo and itemInfo.name or ("Unknown Item " .. tostring(pick))
@@ -1615,7 +1624,6 @@ local module_json = [[
 
 addIntoModule(module_json)
 
--- FIXED: Event Sinkronisasi Langsung ke Variabel Utama
 function onValue(type_evt, name, value)
     if name == "autodf_worldlist" then
         local worlds = {}
@@ -1628,14 +1636,14 @@ function onValue(type_evt, name, value)
     elseif name == "autodf_worldsaveseed" then worldsaveseed = tostring(value)
     elseif name == "autodf_worldsaveseed_door" then worldsaveseedDoor = tostring(value)
     elseif name == "autodf_use_random" then UseRandomDF = value
-    elseif name == "rand_length" then RandLength = tonumber(value) or 5
+    elseif name == "rand_length" then RandLength = math.floor(tonumber(value) or 5)
     elseif name == "rand_with_number" then RandWithNumber = value
     elseif name == "verify_punch" then VerifyPunch = value
     elseif name == "enable_break" then EnableBreak = value
     elseif name == "enable_place" then EnablePlace = value
-    elseif name == "hit_count" then HitCount = tonumber(value) or 1
-    elseif name == "autodf_delaybreak" then dbk = tonumber(value) or dbk
-    elseif name == "autodf_delayplace" then dpc = tonumber(value) or dpc
+    elseif name == "hit_count" then HitCount = math.floor(tonumber(value) or 1)
+    elseif name == "autodf_delaybreak" then dbk = math.floor(tonumber(value) or dbk)
+    elseif name == "autodf_delayplace" then dpc = math.floor(tonumber(value) or dpc)
     
     elseif name == "toggle_pos_check" then
         if value then
@@ -1651,13 +1659,13 @@ function onValue(type_evt, name, value)
         end
 
     elseif name == "autodrop_toggle" then AutoDropEnabled = value
-    elseif name == "min_to_drop" then MinToDrop = tonumber(value) or 190
+    elseif name == "min_to_drop" then MinToDrop = math.floor(tonumber(value) or 190)
     elseif name == "drop_world" then DropWorld = tostring(value)
     elseif name == "drop_door" then DropDoor = tostring(value)
     elseif name == "custom_drop_coords" then CustomDropCoords = tostring(value)
 
     elseif name == "trash_world_toggle" then TrashWorldEnabled = value
-    elseif name == "min_trash_drop" then MinTrashToDrop = tonumber(value) or 50
+    elseif name == "min_trash_drop" then MinTrashToDrop = math.floor(tonumber(value) or 50)
     elseif name == "trash_world" then TrashWorld = tostring(value)
     elseif name == "trash_door" then TrashDoor = tostring(value)
     elseif name == "custom_trash_coords" then CustomTrashCoords = tostring(value)
@@ -1668,17 +1676,17 @@ function onValue(type_evt, name, value)
     elseif name == "pick_door_toggle" then PickDoor_Enabled = value
     elseif name == "pick_door_world" then PickDoor_World = tostring(value)
     elseif name == "pick_door_doorid" then PickDoor_Door = tostring(value)
-    elseif name == "pick_door_id" then PickDoor_ID = tonumber(value) or 0
+    elseif name == "pick_door_id" then PickDoor_ID = math.floor(tonumber(value) or 0)
     
     elseif name == "pick_wl_toggle" then PickWL_Enabled = value
     elseif name == "pick_wl_world" then PickWL_World = tostring(value)
     elseif name == "pick_wl_doorid" then PickWL_Door = tostring(value)
-    elseif name == "pick_wl_id" then PickWL_ID = tonumber(value) or 242
+    elseif name == "pick_wl_id" then PickWL_ID = math.floor(tonumber(value) or 242)
     
     elseif name == "pick_plat_toggle" then PickPlat_Enabled = value
     elseif name == "pick_plat_world" then StoragePlatWorld = tostring(value)
     elseif name == "pick_plat_doorid" then StoragePlatDoor = tostring(value)
-    elseif name == "pick_plat_id" then PlatformID = tonumber(value) or 102
+    elseif name == "pick_plat_id" then PlatformID = math.floor(tonumber(value) or 102)
     
     elseif name == "btn_itemfinder" then openItemFinderDialog()
     
@@ -1701,7 +1709,7 @@ end
 addHook(onSendPacket, "onSendPacket")
 applyHook()
 
-sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master Single Var Fixed `wCreated By `9Freazd"})
+sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master 3-Hitbox Fix `wCreated By `9Freazd"})
 
 runCoroutine(function()
     while true do
