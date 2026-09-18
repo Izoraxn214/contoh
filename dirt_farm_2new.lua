@@ -172,7 +172,7 @@ function inv(itemID)
     return 0
 end
 
--- Jalan Pintar + 300ms Position Sync Buffer (Mencegah Warning GL)
+-- Jalan ke Koordinat Tertentu
 function walkTo(targetX, targetY, maxWaitMs)
     local p = getLocal()
     if not p or not p.posX or not p.posY then return false end
@@ -198,8 +198,7 @@ function walkTo(targetX, targetY, maxWaitMs)
             local pxTile = pl.posX // 32
             local pyTile = pl.posY // 32
             if math.abs(pxTile - targetX) <= 2 and math.abs(pyTile - targetY) <= 2 then
-                -- Jeda Sinkronisasi Posisi Memori GL
-                Sleep(300)
+                Sleep(200)
                 return true
             end
         end
@@ -207,11 +206,35 @@ function walkTo(targetX, targetY, maxWaitMs)
     return false
 end
 
--- Pukulan Presisi (Hard Guard Jarak <= 3 Tile + Fresh Check)
+-- Jalan Pintar Berdiri Aman di Samping Blok Target
+function walkNear(targetX, targetY)
+    local p = getLocal()
+    if not p or not p.posX or not p.posY then return false end
+
+    local curX = p.posX // 32
+    local curY = p.posY // 32
+
+    if math.abs(curX - targetX) <= 2 and math.abs(curY - targetY) <= 2 then
+        return true
+    end
+
+    local standX = targetX
+    local standY = targetY
+
+    if targetX <= 1 then
+        standX = 1
+    elseif targetX >= 98 then
+        standX = 97
+    end
+
+    return walkTo(standX, standY)
+end
+
+-- Pukulan Presisi dengan Fix Parameter Packet (px/py = Target, x/y = Player Pos)
 function tnjk1_3(x, y)
     if not EnableBreak or not autoDF_running then return false end
     
-    if not walkTo(x, y) then return false end
+    if not walkNear(x, y) then return false end
 
     local p = getLocal()
     if not p or not p.posX or not p.posY then return false end
@@ -223,19 +246,27 @@ function tnjk1_3(x, y)
         return false
     end
 
-    local px, py = p.posX, p.posY
+    local packet = {}
+    packet.type = 3
+    packet.state = 2592
+    packet.value = 18
+    packet.px = x
+    packet.py = y
+    packet.x = p.posX
+    packet.y = p.posY
+
     for i = 1, (HitCount or 1) do
-        sendPacketRaw(false, { type = 3, state = 2592, value = 18, x = x, y = y, px = px, py = py })
+        sendPacketRaw(false, packet)
         Sleep(100)
     end
     return true
 end
 
--- Pemasangan Presisi (Hard Guard Jarak <= 3 Tile + Fresh Check)
+-- Pemasangan Presisi dengan Fix Parameter Packet (px/py = Target, x/y = Player Pos)
 function trh1_3(x, y, id)
     if not EnablePlace or not autoDF_running then return false end
     
-    if not walkTo(x, y) then return false end
+    if not walkNear(x, y) then return false end
 
     local p = getLocal()
     if not p or not p.posX or not p.posY then return false end
@@ -247,8 +278,15 @@ function trh1_3(x, y, id)
         return false
     end
 
-    local px, py = p.posX, p.posY
-    sendPacketRaw(false, { type = 3, value = id, x = x, y = y, px = px, py = py })
+    local packet = {}
+    packet.type = 3
+    packet.value = id
+    packet.px = x
+    packet.py = y
+    packet.x = p.posX
+    packet.y = p.posY
+
+    sendPacketRaw(false, packet)
     return true
 end
 
@@ -327,7 +365,7 @@ function ensureSetupItems()
             if object then
                 local itemID = object.itemid or object.id
                 if itemID == WorldLockID or itemID == EntranceID then
-                    walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
+                    walkNear(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
                     Sleep(500)
                     sdtr_11(object)
                     Sleep(500)
@@ -418,7 +456,7 @@ function processAutoDropAndTrash()
             if jmlTrash >= MinTrashToDrop then
                 warp(TrashWorld, TrashDoor)
                 Sleep(6000)
-                walkTo(pos.x, pos.y)
+                walkNear(pos.x, pos.y)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. trashID)
                 Sleep(100)
@@ -438,7 +476,7 @@ function processAutoDropAndTrash()
             if jml >= MinToDrop then
                 warp(DropWorld, DropDoor)
                 Sleep(6000)
-                walkTo(pos.x, pos.y)
+                walkNear(pos.x, pos.y)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. id)
                 Sleep(100)
@@ -513,7 +551,7 @@ function cekSeed()
             if jumlah >= 100 then
                 local emptyTile = findEmptyTile(5)
                 if emptyTile ~= nil then
-                    walkTo(emptyTile.x, emptyTile.y)
+                    walkNear(emptyTile.x, emptyTile.y)
                     Sleep(1000)
                     sendPacket(2, "action|drop\nitemID|" .. id)
                     Sleep(100)
@@ -527,12 +565,79 @@ function cekSeed()
     end
 end
 
+function ambilSeed(id, jumlah)
+    if not autoDF_running then return end
+    if inv(id) < jumlah then
+        LogToConsole("`w[`0Setup`w] Restock Dirt Seed (" .. id .. ") ke Save World...")
+        warp(worldsaveseed, "")
+        Sleep(6000)
+
+        for _, object in pairs(safeGetObjectList()) do
+            if not autoDF_running then return end
+            if object then
+                local itemID = object.itemid or object.id
+                if itemID == id then
+                    walkNear(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
+                    Sleep(500)
+                    sdtr_11(object)
+                    Sleep(500)
+                    if inv(id) >= jumlah then break end
+                end
+            end
+        end
+        warpDFWorld(nameworld)
+        Sleep(6000)
+    end
+end
+
+function plntDf_122()
+    if not autoDF_running then return end
+    LogToConsole("`w[`0Auto DF`w] Kehabisan Dirt Block! Menanam & memanen Dirt Seed mandiri...")
+    walkTo(2, 23)
+    Sleep(500)
+
+    while autoDF_running do
+        for tilex = 2, 25 do
+            if not autoDF_running then return end
+            if inv(3) == 0 then
+                ambilSeed(3, 50)
+                Sleep(200)
+            end
+
+            local tile = safeTile(tilex, 23)
+
+            if tile.fg == 3 and tile.readyharvest then
+                walkTo(tilex, 23)
+                Sleep(200)
+                while safeTile(tilex, 23).fg == 3 and safeTile(tilex, 23).readyharvest and autoDF_running do
+                    tnjk1_3(tilex, 23)
+                    Sleep(dbk)
+                end
+                sdt_11(3)
+            end
+
+            if tile.fg == 0 and inv(3) > 0 then
+                walkTo(tilex, 23)
+                Sleep(200)
+                while safeTile(tilex, 23).fg == 0 and inv(3) > 0 and autoDF_running do
+                    trh1_3(tilex, 23, 3)
+                    Sleep(dpc)
+                end
+            end
+        end
+
+        if inv(2) > 100 then break end
+        Sleep(15000)
+    end
+end
+
 function smpng_12()
     local function clearColumn(column)
+        local standX = (column == 0) and 1 or 97
         for tiley = 24, 53 do
             if not autoDF_running then return end
             if safeTile(column, tiley).bg == 14 or safeTile(column + 1, tiley).bg == 14 then
-                walkTo(column, tiley - 1)
+                walkTo(standX, tiley - 1)
                 local timeout = 0
                 while (safeTile(column, tiley).bg == 14 and autoDF_running and timeout < 20) do
                     if not tnjk1_3(column, tiley) then Sleep(200) end
@@ -571,7 +676,7 @@ function plfS_15()
                     local itemID = object.itemid or object.id
                     if itemID == PlatformID then
                         foundAny = true
-                        walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
+                        walkNear(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
                         Sleep(1000)
                         sdtr_11(object)
                         Sleep(500)
@@ -622,9 +727,12 @@ function plfS_15()
     Sleep(4000)
 end
 
+-- Clearing Grid Utama Versi Zig-zag Bi-directional (Kiri -> Kanan, lalu Kanan -> Kiri)
 function clrd_down_15()
     for tiley = 27, 51, 12 do
         if not autoDF_running then return end
+
+        -- Kiri ke Kanan
         for tilex = 2, 97, 1 do
             if not autoDF_running then return end
             if safeTile(tilex, tiley - 2).bg ~= 0 or safeTile(tilex, tiley).bg ~= 0 or safeTile(tilex, tiley + 2).bg ~= 0 then
@@ -643,6 +751,28 @@ function clrd_down_15()
                 processAutoPick()
             end
         end
+
+        -- Kanan ke Kiri (Layer di bawahnya)
+        if (tiley + 6) <= 53 then
+            for tilex = 97, 2, -1 do
+                if not autoDF_running then return end
+                if safeTile(tilex, tiley + 4).bg ~= 0 or safeTile(tilex, tiley + 6).bg ~= 0 or safeTile(tilex, tiley + 8).bg ~= 0 then
+                    walkTo(tilex + 1, tiley + 6)
+                    Sleep(200)
+                    for i = 4, 8, 2 do
+                        local timeout = 0
+                        while safeTile(tilex, tiley + i).bg ~= 0 and autoDF_running and timeout < 20 do
+                            if not tnjk1_3(tilex, tiley + i) then Sleep(200) end
+                            Sleep(dbk)
+                            timeout = timeout + 1
+                        end
+                        processAutoPick()
+                    end
+                    cekSeed()
+                    processAutoPick()
+                end
+            end
+        end
     end
 end
 
@@ -650,7 +780,7 @@ function brkLv_12()
     for _, tile in pairs(safeGetTiles()) do
         if not autoDF_running then return end
         if tile and tile.fg == 4 then
-            walkTo(tile.x, tile.y - 1)
+            walkNear(tile.x, tile.y - 1)
             Sleep(200)
             local timeout = 0
             while safeTile(tile.x, tile.y).fg == 4 and autoDF_running and timeout < 20 do
@@ -659,7 +789,12 @@ function brkLv_12()
                 timeout = timeout + 1
             end
             processAutoPick()
-            if safeTile(tile.x, tile.y).fg == 0 and autoDF_running and inv(2) > 0 then
+            if safeTile(tile.x, tile.y).fg == 0 and autoDF_running then
+                while inv(2) == 0 and autoDF_running do
+                    ambilSeed(3, 50)
+                    plntDf_122()
+                    Sleep(500)
+                end
                 trh1_3(tile.x, tile.y, 2)
                 Sleep(dpc)
             end
@@ -672,16 +807,80 @@ function plcDrt_2()
         if not autoDF_running then return end
         for tilex = 4, 98, 5 do
             if not autoDF_running then return end
-            walkTo(tilex, tiley + 1)
+            walkNear(tilex, tiley + 1)
             Sleep(300)
             for i = 1, 5 do
                 local tx = (tilex - 3) + i
                 if tx <= 98 and safeTile(tx, tiley).fg == 0 then
+                    while inv(2) == 0 and autoDF_running do
+                        ambilSeed(3, 50)
+                        plntDf_122()
+                        Sleep(200)
+                    end
                     local retry = 0
                     while safeTile(tx, tiley).fg == 0 and inv(2) > 0 and autoDF_running and retry < 5 do
                         if not trh1_3(tx, tiley, 2) then Sleep(200) end
                         Sleep(dpc)
                         retry = retry + 1
+                    end
+                end
+            end
+        end
+    end
+end
+
+function fillEmptyCaveTiles()
+    if not autoDF_running then return end
+    for _, tile in pairs(safeGetTiles()) do
+        if not autoDF_running then return end
+        if tile and tile.bg == 14 and tile.fg == 0 then
+            walkNear(tile.x, tile.y - 1)
+            Sleep(200)
+
+            while inv(2) == 0 and autoDF_running do
+                ambilSeed(3, 50)
+                plntDf_122()
+                Sleep(200)
+            end
+
+            local timeout = 0
+            while safeTile(tile.x, tile.y).fg == 0 and autoDF_running and timeout < 5 do
+                trh1_3(tile.x, tile.y, 2)
+                Sleep(dpc)
+                timeout = timeout + 1
+            end
+        end
+    end
+end
+
+function clearLeftoverSafe()
+    if not autoDF_running then return end
+    LogToConsole("`w[`0Auto DF`w] Membersihkan sisa pohon & item tercecer...")
+    Sleep(1000)
+
+    for tiley = 2, 24 do
+        if not autoDF_running then return end
+        for tilex = 1, 98 do
+            if not autoDF_running then return end
+            local tile = safeTile(tilex, tiley)
+
+            if tile.fg == 3 and tile.readyharvest then
+                walkNear(tilex, tiley + 1)
+                Sleep(150)
+                while safeTile(tilex, tiley).fg == 3 and safeTile(tilex, tiley).readyharvest and autoDF_running do
+                    tnjk1_3(tilex, tiley)
+                    Sleep(dbk)
+                end
+                sdt_11(3)
+            end
+
+            for _, obj in pairs(safeGetObjectList()) do
+                if obj then
+                    local ox = math.floor((obj.posX + 8) / 32)
+                    local oy = math.floor(obj.posY / 32)
+                    if ox == tilex and oy == tiley then
+                        sdtr_11(obj)
+                        Sleep(150)
                     end
                 end
             end
@@ -724,15 +923,36 @@ function mainDF()
 
     if not autoDF_running then return end
     if isWorldAlreadyDone() then return end
+    
     smpng_12()
     if not autoDF_running then return end
+    
     plfS_15()
     if not autoDF_running then return end
+    
     clrd_down_15()
     if not autoDF_running then return end
+    
     brkLv_12()
     if not autoDF_running then return end
+
+    if inv(3) < 25 then
+        ambilSeed(3, 50)
+        if not autoDF_running then return end
+        plntDf_122()
+        if not autoDF_running then return end
+    end
+
     plcDrt_2()
+    if not autoDF_running then return end
+
+    sendPacket(2, "action|respawn")
+    Sleep(3000)
+
+    fillEmptyCaveTiles()
+    if not autoDF_running then return end
+
+    clearLeftoverSafe()
     if not autoDF_running then return end
 
     writeToLocal("finished_df.txt", os.date("[%Y-%m-%d %H:%M] ") .. nameworld .. "\n")
@@ -1283,7 +1503,7 @@ end
 addHook(onSendPacket, "onSendPacket")
 applyHook()
 
-sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF `wCreated By `9Freazd"})
+sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master `wCreated By `9Freazd"})
 
 runCoroutine(function()
     while true do
