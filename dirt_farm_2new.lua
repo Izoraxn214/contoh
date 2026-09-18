@@ -1,7 +1,7 @@
 -- ==========================================
 -- GLOBAL STATE VARIABLES (FULL CONTROLLED BY MGUI)
 -- ==========================================
-WorldList = {"TKTYW, QVSVF, FCMQW, DEJCA, ACMFA, FZSGR, KWYRY, DWTWG, JZUXA, TUIGE, JTLQM, IMCKM, DQKQU, FUQRB, WZWGW"}
+WorldList = {"TKTYW", "QVSVF", "FCMQW", "DEJCA", "ACMFA", "FZSGR", "KWYRY", "DWTWG", "JZUXA", "TUIGE", "JTLQM", "IMCKM", "DQKQU", "FUQRB", "WZWGW"}
 index_world = 1
 nameworld = WorldList[index_world]
 
@@ -173,7 +173,7 @@ function inv(itemID)
     return 0
 end
 
--- Jalan ke Koordinat Presisi (Dengan Batas Peta Aman 0-99)
+-- Jalan ke Koordinat Presisi (Batas Peta Aman 0-99)
 function walkTo(targetX, targetY, maxWaitMs)
     targetX = math.max(0, math.min(99, targetX))
     targetY = math.max(0, math.min(53, targetY))
@@ -572,7 +572,6 @@ function cekSeed()
     end
 end
 
--- Ambil Seed/Item dengan Delay Loading Server + Retry Loop
 function ambilSeed(id, jumlah)
     if not autoDF_running then return end
     if inv(id) < jumlah then
@@ -668,7 +667,7 @@ function plntDf_122()
     end
 end
 
--- Pembersihan Tembok Samping Dual-Column (Target: 0-1 & 98-99 | Player berdiri di X=1 & X=98)
+-- StandX Kiri = 0 (Pojok Kiri), StandX Kanan = 99 (Pojok Kanan)
 function smpng_12()
     local function clearSideColumns(col1, col2, standX)
         for tiley = 24, 53 do
@@ -704,11 +703,10 @@ function smpng_12()
         end
     end
 
-    clearSideColumns(0, 1, 1)   -- Sisi Kiri: Target X=0 & X=1, Player berdiri di X=1
-    clearSideColumns(98, 99, 98) -- Sisi Kanan: Target X=98 & X=99, Player berdiri di X=98
+    clearSideColumns(0, 1, 0)   -- Sisi Kiri: Target X=0 & X=1, Player berdiri di X=0
+    clearSideColumns(98, 99, 99) -- Sisi Kanan: Target X=98 & X=99, Player berdiri di X=99
 end
 
--- Pemasangan Platform Samping (Platform & Player sama-sama di X=1 dan X=98)
 function plfS_15()
     if not autoDF_running then return end
     
@@ -753,7 +751,7 @@ function plfS_15()
         Sleep(6000)
     end
 
-    -- Pasang platform di sisi kiri (X = 1) sambil player berdiri di X = 1
+    -- Pasang platform di sisi kiri (X = 1)
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if safeTile(1, tiley).fg == 0 then
@@ -768,7 +766,7 @@ function plfS_15()
         end
     end
 
-    -- Pasang platform di sisi kanan (X = 98) sambil player berdiri di X = 98
+    -- Pasang platform di sisi kanan (X = 98)
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if safeTile(98, tiley).fg == 0 then
@@ -783,7 +781,7 @@ function plfS_15()
         end
     end
 
-    -- Refresh Warp ke world utama (Bypass Main Door Stuck)
+    -- Refresh Warp ke world utama
     Sleep(1000)
     LogToConsole("`w[`0Auto DF`w] Platform samping selesai. Melakukan refresh warp ke world utama...")
     local currentWorld = safeGetWorldName()
@@ -796,24 +794,31 @@ function plfS_15()
     end
 end
 
--- Pembersihan Dirt Bawah (Tepat di Rentang Area Kerja X=2 s.d. X=97)
+-- FIXED: Pemukulan Rapat Urut ke Bawah (Step 1)
 function clrd_down_15()
     for tiley = 27, 51, 12 do
         if not autoDF_running then return end
 
-        -- Sapuan Kiri ke Kanan (X=2 sampai X=97)
+        -- Sapuan Kiri ke Kanan (X=2 s.d. X=97)
         for tilex = 2, 97, 1 do
             if not autoDF_running then return end
-            local t1 = safeTile(tilex, tiley - 2)
-            local t2 = safeTile(tilex, tiley)
-            local t3 = safeTile(tilex, tiley + 2)
             
-            if (t1.fg ~= 0 or t1.bg ~= 0) or (t2.fg ~= 0 or t2.bg ~= 0) or (t3.fg ~= 0 or t3.bg ~= 0) then
+            local needBreak = false
+            for checkY = -2, 2 do
+                local t = safeTile(tilex, tiley + checkY)
+                if (t.fg ~= 0 or t.bg ~= 0) and not isUnbreakable(t.fg) then
+                    needBreak = true
+                    break
+                end
+            end
+
+            if needBreak then
                 walkTo(tilex - 1, tiley, 1500)
                 Sleep(150)
-                for i = -2, 2, 2 do
+                -- Pemukulan Rapat -2 sampai +2 (Step 1)
+                for i = -2, 2, 1 do
                     local timeout = 0
-                    while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg ~= 0) 
+                    while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg == 14) 
                           and not isUnbreakable(safeTile(tilex, tiley + i).fg) 
                           and autoDF_running and timeout < 20 do
                         if not tnjk1_3(tilex, tiley + i) then Sleep(100) end
@@ -831,16 +836,23 @@ function clrd_down_15()
         if (tiley + 6) <= 53 then
             for tilex = 97, 2, -1 do
                 if not autoDF_running then return end
-                local t1 = safeTile(tilex, tiley + 4)
-                local t2 = safeTile(tilex, tiley + 6)
-                local t3 = safeTile(tilex, tiley + 8)
+                
+                local needBreak = false
+                for checkY = 4, 8 do
+                    local t = safeTile(tilex, tiley + checkY)
+                    if (t.fg ~= 0 or t.bg ~= 0) and not isUnbreakable(t.fg) then
+                        needBreak = true
+                        break
+                    end
+                end
 
-                if (t1.fg ~= 0 or t1.bg ~= 0) or (t2.fg ~= 0 or t2.bg ~= 0) or (t3.fg ~= 0 or t3.bg ~= 0) then
+                if needBreak then
                     walkTo(tilex + 1, tiley + 6, 1500)
                     Sleep(150)
-                    for i = 4, 8, 2 do
+                    -- Pemukulan Rapat +4 sampai +8 (Step 1)
+                    for i = 4, 8, 1 do
                         local timeout = 0
-                        while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg ~= 0) 
+                        while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg == 14) 
                               and not isUnbreakable(safeTile(tilex, tiley + i).fg) 
                               and autoDF_running and timeout < 20 do
                             if not tnjk1_3(tilex, tiley + i) then Sleep(100) end
@@ -883,7 +895,6 @@ function brkLv_12()
     end
 end
 
--- FIXED BUG: Perulangan tilex diubah ke 99 agar kolom X=97 ikut terpasang Dirt
 function plcDrt_2()
     for tiley = 24, 2, -2 do
         if not autoDF_running then return end
@@ -970,7 +981,6 @@ function clearLeftoverSafe()
     end
 end
 
--- FIXED BUG FATAL: Logika Cek World Selesai
 function isWorldAlreadyDone()
     local unclearedCount = 0
 
@@ -989,7 +999,6 @@ function isWorldAlreadyDone()
     end
 
     -- 2. Cek Langit / Area Atas (Y=2 sampai Y=22)
-    -- Jika langit justru masih KOSONG (fg == 0), artinya belum dipasangi Dirt
     local emptySkyCount = 0
     for tiley = 2, 22, 4 do
         for tilex = 10, 90, 10 do
@@ -1638,7 +1647,7 @@ end
 addHook(onSendPacket, "onSendPacket")
 applyHook()
 
-sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master Fully Audited `wCreated By `9Freazd"})
+sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master Downward Sweep Updated `wCreated By `9Freazd"})
 
 runCoroutine(function()
     while true do
