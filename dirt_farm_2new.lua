@@ -239,7 +239,7 @@ function sdtr_11(object)
     if not object then return end
     local packet = {}
     packet.type = 11
-    packet.value = object.id
+    packet.value = object.id or object.netid or 0
     packet.x = object.posX
     packet.y = object.posY
     sendPacketRaw(false, packet)
@@ -250,10 +250,13 @@ function sdt_11(range)
     if not localPlayer then return end
 
     for _, object in pairs(safeGetObjectList()) do
-        if object and math.abs(localPlayer.posX - object.posX) <= (32 * range) and
-           math.abs(localPlayer.posY - object.posY) < (32 * range) and inv(object.itemid) < 200 then
-            sdtr_11(object)
-            Sleep(120)
+        if object then
+            local itemID = object.itemid or object.id
+            if math.abs(localPlayer.posX - object.posX) <= (32 * range) and
+               math.abs(localPlayer.posY - object.posY) < (32 * range) and inv(itemID) < 200 then
+                sdtr_11(object)
+                Sleep(120)
+            end
         end
     end
 end
@@ -304,13 +307,16 @@ function ensureSetupItems()
 
         for _, object in pairs(safeGetObjectList()) do
             if not autoDF_running then return end
-            if object and (object.itemid == WorldLockID or object.itemid == EntranceID) then
-                walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 3000)
-                Sleep(500)
-                sdtr_11(object)
-                Sleep(500)
-                if inv(WorldLockID) > 0 and inv(EntranceID) >= 2 then
-                    break
+            if object then
+                local itemID = object.itemid or object.id
+                if itemID == WorldLockID or itemID == EntranceID then
+                    walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 3000)
+                    Sleep(500)
+                    sdtr_11(object)
+                    Sleep(500)
+                    if inv(WorldLockID) > 0 and inv(EntranceID) >= 2 then
+                        break
+                    end
                 end
             end
         end
@@ -544,13 +550,16 @@ function plfS_15()
             local foundAny = false
             for _, object in pairs(safeGetObjectList()) do
                 if not autoDF_running then return end
-                if object and object.itemid == PlatformID then
-                    foundAny = true
-                    walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 3000)
-                    Sleep(1000)
-                    sdtr_11(object)
-                    Sleep(500)
-                    if inv(PlatformID) >= 52 then break end
+                if object then
+                    local itemID = object.itemid or object.id
+                    if itemID == PlatformID then
+                        foundAny = true
+                        walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 3000)
+                        Sleep(1000)
+                        sdtr_11(object)
+                        Sleep(500)
+                        if inv(PlatformID) >= 52 then break end
+                    end
                 end
             end
             if not foundAny then
@@ -1220,7 +1229,7 @@ function onValue(type_evt, name, value)
     elseif name == "custom_trash_coords" then CustomTrashCoords = tostring(value)
     
     elseif name == "autopick_toggle" then AutoPickEnabled = value
-    elseif name == "autofind_toggle" me AutoFind_Enabled = value
+    elseif name == "autofind_toggle" then AutoFind_Enabled = value
     
     elseif name == "pick_door_toggle" then PickDoor_Enabled = value
     elseif name == "pick_door_world" then PickDoor_World = tostring(value)
