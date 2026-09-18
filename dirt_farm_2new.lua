@@ -151,7 +151,6 @@ function warp(worldName, doorId)
     return true
 end
 
--- Wrapper Warp Cerdas (Mendukung WORLD|DOOR dan Input Door UI)
 function warpDFWorld(worldEntry)
     if not worldEntry or worldEntry == "" then return false end
     local wName, dId = worldEntry:match("([^|]+)|?(.*)")
@@ -161,7 +160,6 @@ function warpDFWorld(worldEntry)
     return warp(wName, dId)
 end
 
--- Pembacaan Inventoris Universal
 function inv(itemID)
     for _, item in pairs(safeGetInventory()) do
         if item then
@@ -174,31 +172,34 @@ function inv(itemID)
     return 0
 end
 
--- Fungsi Jalan Pintar (Menunggu Karakter Tiba Sebelum Aksi)
-function walkTo(targetX, targetY, timeoutMs)
-    timeoutMs = timeoutMs or 3000
+-- Jalan Pintar + 300ms Position Sync Buffer (Mencegah Warning GL)
+function walkTo(targetX, targetY, maxWaitMs)
     local p = getLocal()
     if not p or not p.posX or not p.posY then return false end
 
     local curX = p.posX // 32
     local curY = p.posY // 32
 
-    -- Jika sudah berada di jarak aman (<= 3 tile), langsung anggap sukses
-    if math.abs(curX - targetX) <= 3 and math.abs(curY - targetY) <= 3 then
+    if math.abs(curX - targetX) <= 2 and math.abs(curY - targetY) <= 2 then
         return true
     end
+
+    local dist = math.abs(curX - targetX) + math.abs(curY - targetY)
+    maxWaitMs = maxWaitMs or math.max(5000, dist * 300)
 
     FindPath(targetX, targetY)
 
     local elapsed = 0
-    while autoDF_running and elapsed < timeoutMs do
-        Sleep(100)
-        elapsed = elapsed + 100
+    while autoDF_running and elapsed < maxWaitMs do
+        Sleep(150)
+        elapsed = elapsed + 150
         local pl = getLocal()
         if pl and pl.posX and pl.posY then
-            local px = pl.posX // 32
-            local py = pl.posY // 32
-            if math.abs(px - targetX) <= 3 and math.abs(py - targetY) <= 3 then
+            local pxTile = pl.posX // 32
+            local pyTile = pl.posY // 32
+            if math.abs(pxTile - targetX) <= 2 and math.abs(pyTile - targetY) <= 2 then
+                -- Jeda Sinkronisasi Posisi Memori GL
+                Sleep(300)
                 return true
             end
         end
@@ -206,33 +207,49 @@ function walkTo(targetX, targetY, timeoutMs)
     return false
 end
 
--- Pukulan Aman dengan Validasi Jarak & Movement Synchronizer
+-- Pukulan Presisi (Hard Guard Jarak <= 3 Tile + Fresh Check)
 function tnjk1_3(x, y)
-    if not EnableBreak or not autoDF_running then return end
+    if not EnableBreak or not autoDF_running then return false end
     
-    if not walkTo(x, y, 3000) then return end
+    if not walkTo(x, y) then return false end
 
     local p = getLocal()
-    if not p or not p.posX or not p.posY then return end
+    if not p or not p.posX or not p.posY then return false end
+
+    local pxTile = p.posX // 32
+    local pyTile = p.posY // 32
+
+    if math.abs(pxTile - x) > 3 or math.abs(pyTile - y) > 3 then
+        return false
+    end
 
     local px, py = p.posX, p.posY
     for i = 1, (HitCount or 1) do
         sendPacketRaw(false, { type = 3, state = 2592, value = 18, x = x, y = y, px = px, py = py })
-        Sleep(10)
+        Sleep(100)
     end
+    return true
 end
 
--- Pemasangan Aman dengan Validasi Jarak & Movement Synchronizer
+-- Pemasangan Presisi (Hard Guard Jarak <= 3 Tile + Fresh Check)
 function trh1_3(x, y, id)
-    if not EnablePlace or not autoDF_running then return end
+    if not EnablePlace or not autoDF_running then return false end
     
-    if not walkTo(x, y, 3000) then return end
+    if not walkTo(x, y) then return false end
 
     local p = getLocal()
-    if not p or not p.posX or not p.posY then return end
+    if not p or not p.posX or not p.posY then return false end
+
+    local pxTile = p.posX // 32
+    local pyTile = p.posY // 32
+
+    if math.abs(pxTile - x) > 3 or math.abs(pyTile - y) > 3 then
+        return false
+    end
 
     local px, py = p.posX, p.posY
     sendPacketRaw(false, { type = 3, value = id, x = x, y = y, px = px, py = py })
+    return true
 end
 
 function sdtr_11(object)
@@ -310,7 +327,7 @@ function ensureSetupItems()
             if object then
                 local itemID = object.itemid or object.id
                 if itemID == WorldLockID or itemID == EntranceID then
-                    walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 3000)
+                    walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
                     Sleep(500)
                     sdtr_11(object)
                     Sleep(500)
@@ -340,7 +357,7 @@ function setupNewRandomWorld()
     LogToConsole("`w[`0Setup`w] Memasang WL dan Entrance di sekitar Main Door...")
 
     if inv(WorldLockID) > 0 and safeTile(doorX, doorY - 1).fg == 0 then
-        walkTo(doorX, doorY, 3000)
+        walkTo(doorX, doorY)
         Sleep(500)
         local timeout = 0
         while safeTile(doorX, doorY - 1).fg == 0 and inv(WorldLockID) > 0 and autoDF_running and timeout < 10 do
@@ -357,7 +374,7 @@ function setupNewRandomWorld()
         if not autoDF_running then break end
 
         if safeTile(targetX, doorY).fg ~= 0 and safeTile(targetX, doorY).fg ~= EntranceID then
-            walkTo(doorX, doorY, 3000)
+            walkTo(doorX, doorY)
             Sleep(300)
             local timeout = 0
             while safeTile(targetX, doorY).fg ~= 0 and autoDF_running and timeout < 20 do
@@ -373,7 +390,7 @@ function setupNewRandomWorld()
         end
 
         if inv(EntranceID) > 0 and safeTile(targetX, doorY).fg ~= EntranceID then
-            walkTo(doorX, doorY, 3000)
+            walkTo(doorX, doorY)
             Sleep(300)
             local timeout = 0
             while safeTile(targetX, doorY).fg ~= EntranceID and inv(EntranceID) > 0 and autoDF_running and timeout < 10 do
@@ -401,7 +418,7 @@ function processAutoDropAndTrash()
             if jmlTrash >= MinTrashToDrop then
                 warp(TrashWorld, TrashDoor)
                 Sleep(6000)
-                walkTo(pos.x, pos.y, 4000)
+                walkTo(pos.x, pos.y)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. trashID)
                 Sleep(100)
@@ -421,7 +438,7 @@ function processAutoDropAndTrash()
             if jml >= MinToDrop then
                 warp(DropWorld, DropDoor)
                 Sleep(6000)
-                walkTo(pos.x, pos.y, 4000)
+                walkTo(pos.x, pos.y)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. id)
                 Sleep(100)
@@ -496,7 +513,7 @@ function cekSeed()
             if jumlah >= 100 then
                 local emptyTile = findEmptyTile(5)
                 if emptyTile ~= nil then
-                    walkTo(emptyTile.x, emptyTile.y, 4000)
+                    walkTo(emptyTile.x, emptyTile.y)
                     Sleep(1000)
                     sendPacket(2, "action|drop\nitemID|" .. id)
                     Sleep(100)
@@ -515,16 +532,16 @@ function smpng_12()
         for tiley = 24, 53 do
             if not autoDF_running then return end
             if safeTile(column, tiley).bg == 14 or safeTile(column + 1, tiley).bg == 14 then
-                walkTo(column, tiley - 1, 4000)
+                walkTo(column, tiley - 1)
                 local timeout = 0
                 while (safeTile(column, tiley).bg == 14 and autoDF_running and timeout < 20) do
-                    tnjk1_3(column, tiley)
+                    if not tnjk1_3(column, tiley) then Sleep(200) end
                     Sleep(dbk)
                     timeout = timeout + 1
                 end
                 timeout = 0
                 while (safeTile(column + 1, tiley).bg == 14 and autoDF_running and timeout < 20) do
-                    tnjk1_3(column + 1, tiley)
+                    if not tnjk1_3(column + 1, tiley) then Sleep(200) end
                     Sleep(dbk)
                     timeout = timeout + 1
                 end
@@ -554,7 +571,7 @@ function plfS_15()
                     local itemID = object.itemid or object.id
                     if itemID == PlatformID then
                         foundAny = true
-                        walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 3000)
+                        walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
                         Sleep(1000)
                         sdtr_11(object)
                         Sleep(500)
@@ -575,11 +592,11 @@ function plfS_15()
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if safeTile(1, tiley).fg == 0 then
-            walkTo(0, tiley, 3000)
+            walkTo(0, tiley)
             Sleep(200)
             local timeout = 0
             while safeTile(1, tiley).fg == 0 and autoDF_running and timeout < 10 do
-                trh1_3(1, tiley, PlatformID)
+                if not trh1_3(1, tiley, PlatformID) then Sleep(200) end
                 Sleep(dpc)
                 timeout = timeout + 1
             end
@@ -589,11 +606,11 @@ function plfS_15()
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if safeTile(98, tiley).fg == 0 then
-            walkTo(99, tiley, 3000)
+            walkTo(99, tiley)
             Sleep(200)
             local timeout = 0
             while safeTile(98, tiley).fg == 0 and autoDF_running and timeout < 10 do
-                trh1_3(98, tiley, PlatformID)
+                if not trh1_3(98, tiley, PlatformID) then Sleep(200) end
                 Sleep(dpc)
                 timeout = timeout + 1
             end
@@ -611,12 +628,12 @@ function clrd_down_15()
         for tilex = 2, 97, 1 do
             if not autoDF_running then return end
             if safeTile(tilex, tiley - 2).bg ~= 0 or safeTile(tilex, tiley).bg ~= 0 or safeTile(tilex, tiley + 2).bg ~= 0 then
-                walkTo(tilex - 1, tiley, 3000)
+                walkTo(tilex - 1, tiley)
                 Sleep(200)
                 for i = -2, 2, 2 do
                     local timeout = 0
                     while safeTile(tilex, tiley + i).bg ~= 0 and autoDF_running and timeout < 20 do
-                        tnjk1_3(tilex, tiley + i)
+                        if not tnjk1_3(tilex, tiley + i) then Sleep(200) end
                         Sleep(dbk)
                         timeout = timeout + 1
                     end
@@ -633,11 +650,11 @@ function brkLv_12()
     for _, tile in pairs(safeGetTiles()) do
         if not autoDF_running then return end
         if tile and tile.fg == 4 then
-            walkTo(tile.x, tile.y - 1, 3000)
+            walkTo(tile.x, tile.y - 1)
             Sleep(200)
             local timeout = 0
             while safeTile(tile.x, tile.y).fg == 4 and autoDF_running and timeout < 20 do
-                tnjk1_3(tile.x, tile.y)
+                if not tnjk1_3(tile.x, tile.y) then Sleep(200) end
                 Sleep(dbk)
                 timeout = timeout + 1
             end
@@ -655,14 +672,14 @@ function plcDrt_2()
         if not autoDF_running then return end
         for tilex = 4, 98, 5 do
             if not autoDF_running then return end
-            walkTo(tilex, tiley + 1, 3000)
+            walkTo(tilex, tiley + 1)
             Sleep(300)
             for i = 1, 5 do
                 local tx = (tilex - 3) + i
                 if tx <= 98 and safeTile(tx, tiley).fg == 0 then
                     local retry = 0
                     while safeTile(tx, tiley).fg == 0 and inv(2) > 0 and autoDF_running and retry < 5 do
-                        trh1_3(tx, tiley, 2)
+                        if not trh1_3(tx, tiley, 2) then Sleep(200) end
                         Sleep(dpc)
                         retry = retry + 1
                     end
@@ -1181,7 +1198,6 @@ local module_json = [[
 }
 ]]
 
--- Registrasi Module UI Growlauncher
 addIntoModule(module_json)
 
 function onValue(type_evt, name, value)
