@@ -1,36 +1,29 @@
-Config = {
-    World = {
-        nameworld = {"CONCG", "MLJEG", "JVHXP", "IIGNV", "YCRRU", "JSVMB", "BIPKC"},
-        StoragePlatWorld = "PHINIS",
-        StoragePlatDoor = "DoorID",
-        worldsaveseed = "PHINIS|DoorID"
-     },
-
-    DelaySettings = {
-        DELAY_PLACE = 120, -- Anti Soft-Ban
-        DELAY_BREAK = 220  -- Anti Soft-Ban
-    }
-}
-
+-- ==========================================
+-- GLOBAL STATE VARIABLES (FULL CONTROLLED BY MGUI)
+-- ==========================================
+WorldList = {"CONCG", "MLJEG", "JVHXP", "IIGNV", "YCRRU", "JSVMB", "BIPKC"}
 index_world = 1
-nameworld = Config.World.nameworld[index_world]
-StoragePlatWorld = Config.World.StoragePlatWorld
-StoragePlatDoor = Config.World.StoragePlatDoor
-worldsaveseed = Config.World.worldsaveseed
+nameworld = WorldList[index_world]
 
+StoragePlatWorld = "PLATSAVEHAM"
+StoragePlatDoor = "112345"
+worldsaveseed = "PLATSAVEHAM|12345"
+
+dpc = 120 -- Delay Place (ms)
+dbk = 220 -- Delay Break (ms)
+
+PlatformID = 102
+WorldLockID = 242
+EntranceID = 6
+
+-- Edit Toggles Bawaan Client
 EditToggle("Antibounce", true)
 EditToggle("ModFly", true)
 EditToggle("Antilag", true)
 EditToggle("Fast Trash", true)
 EditToggle("Fast Drop", true)
 EditToggle("Cant Pickup Item", true)
-
-dpc = Config.DelaySettings.DELAY_PLACE
-dbk = Config.DelaySettings.DELAY_BREAK
-
-PlatformID = 102
-WorldLockID = 242
-EntranceID = 6
+EditToggle("Anti Lava", true)
 
 -- State Fitur Utama DF
 autoDF_running = false
@@ -42,37 +35,37 @@ HitCount = 1
 VerifyPunch = false
 
 -- State Non-Random World Door ID
-DFWorldDoor = ""
+DFWorldDoor = "IWP2145"
 
 -- State Auto Drop Setting (Format ID:X:Y)
-AutoDropEnabled = false
+AutoDropEnabled = true
 MinToDrop = 190
-DropWorld = "SDZRR"
-DropDoor = ""
+DropWorld = "PLATSAVEHAM"
+DropDoor = "12345"
 CustomDropCoords = "3:26:11, 15:28:11, 5:30:11, 11:32:11"
 
 -- State Trash World Setting (Format ID:X:Y)
 TrashWorldEnabled = true
 MinTrashToDrop = 50
-TrashWorld = "TRASHWORLD"
-TrashDoor = ""
+TrashWorld = "PLATSAVEHAM"
+TrashDoor = "12345"
 CustomTrashCoords = "4:35:11, 10:37:11, 14:39:11"
 
 -- State Auto Pick Setting
-AutoPickEnabled = false
+AutoPickEnabled = true
 AutoFind_Enabled = true
 
-PickDoor_Enabled = false
-PickDoor_World = ""
-PickDoor_Door = ""
-PickDoor_ID = 0
+PickDoor_Enabled = true
+PickDoor_World = "PLATSAVEHAM"
+PickDoor_Door = "12345"
+PickDoor_ID = 5036
 
-PickWL_Enabled = false
-PickWL_World = ""
-PickWL_Door = ""
+PickWL_Enabled = true
+PickWL_World = "PLATSAVEHAM"
+PickWL_Door = "12345"
 PickWL_ID = 242
 
-PickPlat_Enabled = false
+PickPlat_Enabled = true
 PickPlat_World = StoragePlatWorld
 PickPlat_Door = StoragePlatDoor
 PickPlat_ID = PlatformID
@@ -83,6 +76,11 @@ RandLength = 5
 RandWithNumber = false
 
 math.randomseed(os.time())
+
+-- Filter Blok & Lock yang Tidak Bisa Dihancurkan
+local function isUnbreakable(fg)
+    return fg == 8 or fg == 6 or fg == 242 or fg == 202 or fg == 204 or fg == 206 or fg == 2408 or fg == 4994 or fg == 1790
+end
 
 -- Parser Koordinat Presisi (Format: ID:X:Y)
 local function parseCoordMap(str)
@@ -165,14 +163,14 @@ function inv(itemID)
         if item then
             local id = item.id or item.itemid or item.item_id
             if id == itemID then 
-                return item.amount or 0 
+                return item.amount or item.count or 0 
             end
         end
     end
     return 0
 end
 
--- Jalan ke Koordinat Tertentu
+-- Jalan ke Koordinat Presisi
 function walkTo(targetX, targetY, maxWaitMs)
     local p = getLocal()
     if not p or not p.posX or not p.posY then return false end
@@ -180,12 +178,12 @@ function walkTo(targetX, targetY, maxWaitMs)
     local curX = p.posX // 32
     local curY = p.posY // 32
 
-    if math.abs(curX - targetX) <= 2 and math.abs(curY - targetY) <= 2 then
+    if curX == targetX and curY == targetY then
         return true
     end
 
     local dist = math.abs(curX - targetX) + math.abs(curY - targetY)
-    maxWaitMs = maxWaitMs or math.max(5000, dist * 300)
+    maxWaitMs = maxWaitMs or math.min(2000, math.max(1000, dist * 200))
 
     FindPath(targetX, targetY)
 
@@ -197,8 +195,8 @@ function walkTo(targetX, targetY, maxWaitMs)
         if pl and pl.posX and pl.posY then
             local pxTile = pl.posX // 32
             local pyTile = pl.posY // 32
-            if math.abs(pxTile - targetX) <= 2 and math.abs(pyTile - targetY) <= 2 then
-                Sleep(200)
+            if pxTile == targetX and pyTile == targetY then
+                Sleep(150)
                 return true
             end
         end
@@ -206,36 +204,10 @@ function walkTo(targetX, targetY, maxWaitMs)
     return false
 end
 
--- Jalan Pintar Berdiri Aman di Samping Blok Target
-function walkNear(targetX, targetY)
-    local p = getLocal()
-    if not p or not p.posX or not p.posY then return false end
-
-    local curX = p.posX // 32
-    local curY = p.posY // 32
-
-    if math.abs(curX - targetX) <= 2 and math.abs(curY - targetY) <= 2 then
-        return true
-    end
-
-    local standX = targetX
-    local standY = targetY
-
-    if targetX <= 1 then
-        standX = 1
-    elseif targetX >= 98 then
-        standX = 97
-    end
-
-    return walkTo(standX, standY)
-end
-
--- Pukulan Presisi dengan Fix Parameter Packet (px/py = Target, x/y = Player Pos)
+-- Pukulan Presisi (px/py = Target, x/y = Player Pos)
 function tnjk1_3(x, y)
     if not EnableBreak or not autoDF_running then return false end
     
-    if not walkNear(x, y) then return false end
-
     local p = getLocal()
     if not p or not p.posX or not p.posY then return false end
 
@@ -243,7 +215,10 @@ function tnjk1_3(x, y)
     local pyTile = p.posY // 32
 
     if math.abs(pxTile - x) > 3 or math.abs(pyTile - y) > 3 then
-        return false
+        local standX = (x > pxTile) and (x - 1) or (x + 1)
+        if not walkTo(standX, y, 1500) then return false end
+        p = getLocal()
+        if not p or not p.posX or not p.posY then return false end
     end
 
     local packet = {}
@@ -262,12 +237,10 @@ function tnjk1_3(x, y)
     return true
 end
 
--- Pemasangan Presisi dengan Fix Parameter Packet (px/py = Target, x/y = Player Pos)
+-- Pemasangan Presisi (px/py = Target, x/y = Player Pos)
 function trh1_3(x, y, id)
     if not EnablePlace or not autoDF_running then return false end
     
-    if not walkNear(x, y) then return false end
-
     local p = getLocal()
     if not p or not p.posX or not p.posY then return false end
 
@@ -275,7 +248,10 @@ function trh1_3(x, y, id)
     local pyTile = p.posY // 32
 
     if math.abs(pxTile - x) > 3 or math.abs(pyTile - y) > 3 then
-        return false
+        local standX = (x > pxTile) and (x - 1) or (x + 1)
+        if not walkTo(standX, y, 1500) then return false end
+        p = getLocal()
+        if not p or not p.posX or not p.posY then return false end
     end
 
     local packet = {}
@@ -318,7 +294,7 @@ end
 
 function hasWorldLock()
     for _, tile in pairs(safeGetTiles()) do
-        if tile and (tile.fg == WorldLockID or tile.bg == WorldLockID) then
+        if tile and (isUnbreakable(tile.fg) or isUnbreakable(tile.bg)) then
             return true
         end
     end
@@ -365,7 +341,7 @@ function ensureSetupItems()
             if object then
                 local itemID = object.itemid or object.id
                 if itemID == WorldLockID or itemID == EntranceID then
-                    walkNear(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
+                    walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 2000)
                     Sleep(500)
                     sdtr_11(object)
                     Sleep(500)
@@ -384,7 +360,7 @@ end
 function setupNewRandomWorld()
     if not autoDF_running then return false end
     if hasWorldLock() then
-        LogToConsole("`4[`0Random World`4] World sudah dilock orang/punya WL, mencari world lain...")
+        LogToConsole("`4[`0Random World`4] World sudah dilock orang/punya Lock, mencari world lain...")
         return false
     end
 
@@ -394,16 +370,26 @@ function setupNewRandomWorld()
     local doorX, doorY = findMainDoor()
     LogToConsole("`w[`0Setup`w] Memasang WL dan Entrance di sekitar Main Door...")
 
+    if safeTile(doorX, doorY - 1).fg ~= 0 and safeTile(doorX, doorY - 1).fg ~= WorldLockID then
+        walkTo(doorX, doorY, 2000)
+        local timeout = 0
+        while safeTile(doorX, doorY - 1).fg ~= 0 and autoDF_running and timeout < 20 do
+            tnjk1_3(doorX, doorY - 1)
+            Sleep(dbk)
+            timeout = timeout + 1
+        end
+    end
+
     if inv(WorldLockID) > 0 and safeTile(doorX, doorY - 1).fg == 0 then
-        walkTo(doorX, doorY)
-        Sleep(500)
+        walkTo(doorX, doorY, 2000)
+        Sleep(300)
         local timeout = 0
         while safeTile(doorX, doorY - 1).fg == 0 and inv(WorldLockID) > 0 and autoDF_running and timeout < 10 do
             trh1_3(doorX, doorY - 1, WorldLockID)
             Sleep(dpc)
             timeout = timeout + 1
         end
-        Sleep(500)
+        Sleep(300)
     end
 
     local sidePositions = { doorX - 1, doorX + 1 }
@@ -412,7 +398,7 @@ function setupNewRandomWorld()
         if not autoDF_running then break end
 
         if safeTile(targetX, doorY).fg ~= 0 and safeTile(targetX, doorY).fg ~= EntranceID then
-            walkTo(doorX, doorY)
+            walkTo(doorX, doorY, 2000)
             Sleep(300)
             local timeout = 0
             while safeTile(targetX, doorY).fg ~= 0 and autoDF_running and timeout < 20 do
@@ -428,7 +414,7 @@ function setupNewRandomWorld()
         end
 
         if inv(EntranceID) > 0 and safeTile(targetX, doorY).fg ~= EntranceID then
-            walkTo(doorX, doorY)
+            walkTo(doorX, doorY, 2000)
             Sleep(300)
             local timeout = 0
             while safeTile(targetX, doorY).fg ~= EntranceID and inv(EntranceID) > 0 and autoDF_running and timeout < 10 do
@@ -456,7 +442,7 @@ function processAutoDropAndTrash()
             if jmlTrash >= MinTrashToDrop then
                 warp(TrashWorld, TrashDoor)
                 Sleep(6000)
-                walkNear(pos.x, pos.y)
+                walkTo(pos.x, pos.y, 2000)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. trashID)
                 Sleep(100)
@@ -476,7 +462,7 @@ function processAutoDropAndTrash()
             if jml >= MinToDrop then
                 warp(DropWorld, DropDoor)
                 Sleep(6000)
-                walkNear(pos.x, pos.y)
+                walkTo(pos.x, pos.y, 2000)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. id)
                 Sleep(100)
@@ -541,7 +527,7 @@ function cekSeed()
         end
     end
 
-    if needDrop and not AutoDropEnabled and worldsaveseed ~= "" and worldsaveseed ~= "PHINIS|DoorID" then
+    if needDrop and not AutoDropEnabled and worldsaveseed ~= "" then
         Sleep(200)
         warp(worldsaveseed, "")
         Sleep(6000)
@@ -551,7 +537,7 @@ function cekSeed()
             if jumlah >= 100 then
                 local emptyTile = findEmptyTile(5)
                 if emptyTile ~= nil then
-                    walkNear(emptyTile.x, emptyTile.y)
+                    walkTo(emptyTile.x, emptyTile.y, 2000)
                     Sleep(1000)
                     sendPacket(2, "action|drop\nitemID|" .. id)
                     Sleep(100)
@@ -568,7 +554,10 @@ end
 function ambilSeed(id, jumlah)
     if not autoDF_running then return end
     if inv(id) < jumlah then
-        LogToConsole("`w[`0Setup`w] Restock Dirt Seed (" .. id .. ") ke Save World...")
+        if worldsaveseed == "" or worldsaveseed == "PHINIS|DoorID" then return end
+        LogToConsole("`w[`0Setup`w] Restock Seed (" .. id .. ") ke Save World: " .. worldsaveseed)
+        
+        local initialAmount = inv(id)
         warp(worldsaveseed, "")
         Sleep(6000)
 
@@ -577,23 +566,28 @@ function ambilSeed(id, jumlah)
             if object then
                 local itemID = object.itemid or object.id
                 if itemID == id then
-                    walkNear(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
-                    Sleep(500)
+                    walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 2000)
+                    Sleep(400)
                     sdtr_11(object)
-                    Sleep(500)
+                    Sleep(400)
                     if inv(id) >= jumlah then break end
                 end
             end
         end
+
         warpDFWorld(nameworld)
         Sleep(6000)
+
+        if inv(id) <= initialAmount then
+            LogToConsole("`4[`0Warning`4] Stok Seed di Storage habis! Melanjutkan tanpa restock...")
+        end
     end
 end
 
 function plntDf_122()
     if not autoDF_running then return end
     LogToConsole("`w[`0Auto DF`w] Kehabisan Dirt Block! Menanam & memanen Dirt Seed mandiri...")
-    walkTo(2, 23)
+    walkTo(2, 23, 2000)
     Sleep(500)
 
     while autoDF_running do
@@ -607,7 +601,7 @@ function plntDf_122()
             local tile = safeTile(tilex, 23)
 
             if tile.fg == 3 and tile.readyharvest then
-                walkTo(tilex, 23)
+                walkTo(tilex, 23, 1500)
                 Sleep(200)
                 while safeTile(tilex, 23).fg == 3 and safeTile(tilex, 23).readyharvest and autoDF_running do
                     tnjk1_3(tilex, 23)
@@ -617,7 +611,7 @@ function plntDf_122()
             end
 
             if tile.fg == 0 and inv(3) > 0 then
-                walkTo(tilex, 23)
+                walkTo(tilex, 23, 1500)
                 Sleep(200)
                 while safeTile(tilex, 23).fg == 0 and inv(3) > 0 and autoDF_running do
                     trh1_3(tilex, 23, 3)
@@ -627,26 +621,33 @@ function plntDf_122()
         end
 
         if inv(2) > 100 then break end
-        Sleep(15000)
+        
+        local waitElapsed = 0
+        while autoDF_running and waitElapsed < 15000 do
+            Sleep(500)
+            waitElapsed = waitElapsed + 500
+        end
     end
 end
 
 function smpng_12()
-    local function clearColumn(column)
-        local standX = (column == 0) and 1 or 97
+    local function clearColumn(column, standX)
         for tiley = 24, 53 do
             if not autoDF_running then return end
             if safeTile(column, tiley).bg == 14 or safeTile(column + 1, tiley).bg == 14 then
-                walkTo(standX, tiley - 1)
+                walkTo(standX, tiley - 1, 1500)
+                Sleep(100)
+                
                 local timeout = 0
                 while (safeTile(column, tiley).bg == 14 and autoDF_running and timeout < 20) do
-                    if not tnjk1_3(column, tiley) then Sleep(200) end
+                    if not tnjk1_3(column, tiley) then Sleep(100) end
                     Sleep(dbk)
                     timeout = timeout + 1
                 end
+
                 timeout = 0
                 while (safeTile(column + 1, tiley).bg == 14 and autoDF_running and timeout < 20) do
-                    if not tnjk1_3(column + 1, tiley) then Sleep(200) end
+                    if not tnjk1_3(column + 1, tiley) then Sleep(100) end
                     Sleep(dbk)
                     timeout = timeout + 1
                 end
@@ -656,15 +657,19 @@ function smpng_12()
             processAutoPick()
         end
     end
-    clearColumn(0)
-    clearColumn(98)
+    clearColumn(1, 1)   
+    clearColumn(97, 98) 
 end
 
 function plfS_15()
     if not autoDF_running then return end
+    
+    local targetWorld = (PickPlat_World ~= "") and PickPlat_World or StoragePlatWorld
+    local targetDoor = (PickPlat_Door ~= "") and PickPlat_Door or StoragePlatDoor
+
     if inv(PlatformID) < 52 then
         Sleep(2000)
-        warp(StoragePlatWorld, StoragePlatDoor)
+        warp(targetWorld, targetDoor)
         Sleep(6000)
         
         local attempts = 0
@@ -676,7 +681,7 @@ function plfS_15()
                     local itemID = object.itemid or object.id
                     if itemID == PlatformID then
                         foundAny = true
-                        walkNear(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32))
+                        walkTo(math.floor((object.posX + 8) / 32) - 1, math.floor(object.posY / 32), 2000)
                         Sleep(1000)
                         sdtr_11(object)
                         Sleep(500)
@@ -697,7 +702,7 @@ function plfS_15()
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if safeTile(1, tiley).fg == 0 then
-            walkTo(0, tiley)
+            walkTo(1, tiley, 1500)
             Sleep(200)
             local timeout = 0
             while safeTile(1, tiley).fg == 0 and autoDF_running and timeout < 10 do
@@ -711,7 +716,7 @@ function plfS_15()
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if safeTile(98, tiley).fg == 0 then
-            walkTo(99, tiley)
+            walkTo(98, tiley, 1500)
             Sleep(200)
             local timeout = 0
             while safeTile(98, tiley).fg == 0 and autoDF_running and timeout < 10 do
@@ -727,21 +732,25 @@ function plfS_15()
     Sleep(4000)
 end
 
--- Clearing Grid Utama Versi Zig-zag Bi-directional (Kiri -> Kanan, lalu Kanan -> Kiri)
 function clrd_down_15()
     for tiley = 27, 51, 12 do
         if not autoDF_running then return end
 
-        -- Kiri ke Kanan
         for tilex = 2, 97, 1 do
             if not autoDF_running then return end
-            if safeTile(tilex, tiley - 2).bg ~= 0 or safeTile(tilex, tiley).bg ~= 0 or safeTile(tilex, tiley + 2).bg ~= 0 then
-                walkTo(tilex - 1, tiley)
-                Sleep(200)
+            local t1 = safeTile(tilex, tiley - 2)
+            local t2 = safeTile(tilex, tiley)
+            local t3 = safeTile(tilex, tiley + 2)
+            
+            if (t1.fg ~= 0 or t1.bg ~= 0) or (t2.fg ~= 0 or t2.bg ~= 0) or (t3.fg ~= 0 or t3.bg ~= 0) then
+                walkTo(tilex - 1, tiley, 1500)
+                Sleep(150)
                 for i = -2, 2, 2 do
                     local timeout = 0
-                    while safeTile(tilex, tiley + i).bg ~= 0 and autoDF_running and timeout < 20 do
-                        if not tnjk1_3(tilex, tiley + i) then Sleep(200) end
+                    while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg ~= 0) 
+                          and not isUnbreakable(safeTile(tilex, tiley + i).fg) 
+                          and autoDF_running and timeout < 20 do
+                        if not tnjk1_3(tilex, tiley + i) then Sleep(100) end
                         Sleep(dbk)
                         timeout = timeout + 1
                     end
@@ -752,17 +761,22 @@ function clrd_down_15()
             end
         end
 
-        -- Kanan ke Kiri (Layer di bawahnya)
         if (tiley + 6) <= 53 then
             for tilex = 97, 2, -1 do
                 if not autoDF_running then return end
-                if safeTile(tilex, tiley + 4).bg ~= 0 or safeTile(tilex, tiley + 6).bg ~= 0 or safeTile(tilex, tiley + 8).bg ~= 0 then
-                    walkTo(tilex + 1, tiley + 6)
-                    Sleep(200)
+                local t1 = safeTile(tilex, tiley + 4)
+                local t2 = safeTile(tilex, tiley + 6)
+                local t3 = safeTile(tilex, tiley + 8)
+
+                if (t1.fg ~= 0 or t1.bg ~= 0) or (t2.fg ~= 0 or t2.bg ~= 0) or (t3.fg ~= 0 or t3.bg ~= 0) then
+                    walkTo(tilex + 1, tiley + 6, 1500)
+                    Sleep(150)
                     for i = 4, 8, 2 do
                         local timeout = 0
-                        while safeTile(tilex, tiley + i).bg ~= 0 and autoDF_running and timeout < 20 do
-                            if not tnjk1_3(tilex, tiley + i) then Sleep(200) end
+                        while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg ~= 0) 
+                              and not isUnbreakable(safeTile(tilex, tiley + i).fg) 
+                              and autoDF_running and timeout < 20 do
+                            if not tnjk1_3(tilex, tiley + i) then Sleep(100) end
                             Sleep(dbk)
                             timeout = timeout + 1
                         end
@@ -780,7 +794,7 @@ function brkLv_12()
     for _, tile in pairs(safeGetTiles()) do
         if not autoDF_running then return end
         if tile and tile.fg == 4 then
-            walkNear(tile.x, tile.y - 1)
+            walkTo(tile.x, tile.y - 1, 2000)
             Sleep(200)
             local timeout = 0
             while safeTile(tile.x, tile.y).fg == 4 and autoDF_running and timeout < 20 do
@@ -807,7 +821,7 @@ function plcDrt_2()
         if not autoDF_running then return end
         for tilex = 4, 98, 5 do
             if not autoDF_running then return end
-            walkNear(tilex, tiley + 1)
+            walkTo(tilex, tiley + 1, 1500)
             Sleep(300)
             for i = 1, 5 do
                 local tx = (tilex - 3) + i
@@ -834,7 +848,7 @@ function fillEmptyCaveTiles()
     for _, tile in pairs(safeGetTiles()) do
         if not autoDF_running then return end
         if tile and tile.bg == 14 and tile.fg == 0 then
-            walkNear(tile.x, tile.y - 1)
+            walkTo(tile.x, tile.y - 1, 1500)
             Sleep(200)
 
             while inv(2) == 0 and autoDF_running do
@@ -865,7 +879,7 @@ function clearLeftoverSafe()
             local tile = safeTile(tilex, tiley)
 
             if tile.fg == 3 and tile.readyharvest then
-                walkNear(tilex, tiley + 1)
+                walkTo(tilex, tiley + 1, 1500)
                 Sleep(150)
                 while safeTile(tilex, tiley).fg == 3 and safeTile(tilex, tiley).readyharvest and autoDF_running do
                     tnjk1_3(tilex, tiley)
@@ -889,9 +903,36 @@ function clearLeftoverSafe()
 end
 
 function isWorldAlreadyDone()
-    for tiley = 2, 52, 2 do
-        if safeTile(1, tiley).fg == 0 or safeTile(98, tiley).fg == 0 then return false end
+    local unclearedCount = 0
+
+    -- 1. Cek Gua & Tanah Bawah (Y=25 sampai Y=53)
+    for tiley = 25, 53, 4 do
+        for tilex = 5, 95, 5 do
+            local t = safeTile(tilex, tiley)
+            if t.bg == 14 or (t.fg ~= 0 and not isUnbreakable(t.fg)) then 
+                unclearedCount = unclearedCount + 1
+            end
+        end
     end
+
+    -- 2. Cek Langit / Area Atas (Y=2 sampai Y=22)
+    for tiley = 2, 22, 5 do
+        for tilex = 10, 90, 20 do
+            local t = safeTile(tilex, tiley)
+            if t.fg ~= 0 and not isUnbreakable(t.fg) then
+                unclearedCount = unclearedCount + 1
+            end
+        end
+    end
+
+    if unclearedCount > 10 then
+        return false
+    end
+
+    if safeTile(50, 24).fg == 0 then
+        return false
+    end
+
     return true
 end
 
@@ -922,7 +963,10 @@ function mainDF()
     end
 
     if not autoDF_running then return end
-    if isWorldAlreadyDone() then return end
+    if isWorldAlreadyDone() then 
+        LogToConsole("`w[`0Auto DF`w] World " .. nameworld .. " sudah bersih / selesai! Lanjut ke world berikutnya...")
+        return 
+    end
     
     smpng_12()
     if not autoDF_running then return end
@@ -967,8 +1011,8 @@ function LoopMultiWorld()
         if UseRandomDF then
             nameworld = generateRandomWorld(RandLength, RandWithNumber)
         else
-            if index_world > #Config.World.nameworld then index_world = 1 end
-            nameworld = Config.World.nameworld[index_world]
+            if index_world > #WorldList then index_world = 1 end
+            nameworld = WorldList[index_world]
         end
 
         if nameworld then
@@ -978,7 +1022,7 @@ function LoopMultiWorld()
         if not autoDF_running then return end
         if not UseRandomDF then
             index_world = index_world + 1
-            if index_world > #Config.World.nameworld then index_world = 1 end
+            if index_world > #WorldList then index_world = 1 end
         end
         Sleep(2000)
     end
@@ -1108,9 +1152,16 @@ local module_json = [[
                 {
                     "type": "input_string",
                     "text": "List World Door ID (Opsional)",
-                    "default": "",
+                    "default": "IWP2145",
                     "icon": "Edit",
                     "alias": "autodf_worlddoor"
+                },
+                {
+                    "type": "input_string",
+                    "text": "World Save Seed (WORLD|DOOR)",
+                    "default": "PLATSAVEHAM|12345",
+                    "icon": "Edit",
+                    "alias": "autodf_worldsaveseed"
                 },
                 {
                     "type": "toggle",
@@ -1205,7 +1256,7 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Auto drop",
-                    "default": false,
+                    "default": true,
                     "alias": "autodrop_toggle"
                 },
                 {
@@ -1220,14 +1271,14 @@ local module_json = [[
                 {
                     "type": "input_string",
                     "text": "World to drop",
-                    "default": "SDZRR",
+                    "default": "PLATSAVEHAM",
                     "icon": "Edit",
                     "alias": "drop_world"
                 },
                 {
                     "type": "input_string",
                     "text": "Door to drop",
-                    "default": "",
+                    "default": "12345",
                     "icon": "Edit",
                     "alias": "drop_door"
                 },
@@ -1267,14 +1318,14 @@ local module_json = [[
                 {
                     "type": "input_string",
                     "text": "Trash World Name",
-                    "default": "TRASHWORLD",
+                    "default": "PLATSAVEHAM",
                     "icon": "Edit",
                     "alias": "trash_world"
                 },
                 {
                     "type": "input_string",
                     "text": "Trash Door ID",
-                    "default": "",
+                    "default": "12345",
                     "icon": "Edit",
                     "alias": "trash_door"
                 },
@@ -1299,7 +1350,7 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Auto pick (Global)",
-                    "default": false,
+                    "default": true,
                     "alias": "autopick_toggle"
                 },
                 {
@@ -1314,27 +1365,27 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Pick Door Entrance",
-                    "default": false,
+                    "default": true,
                     "alias": "pick_door_toggle"
                 },
                 {
                     "type": "input_string",
                     "text": "Door World Name",
-                    "default": "",
+                    "default": "PLATSAVEHAM",
                     "icon": "Edit",
                     "alias": "pick_door_world"
                 },
                 {
                     "type": "input_string",
                     "text": "Door ID / Door Name",
-                    "default": "",
+                    "default": "12345",
                     "icon": "Edit",
                     "alias": "pick_door_doorid"
                 },
                 {
                     "type": "input_int",
                     "text": "Door Item ID",
-                    "default": "0",
+                    "default": "5036",
                     "label": "ID",
                     "placeholder": "Item ID",
                     "icon": "Verified",
@@ -1346,20 +1397,20 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Pick World Lock",
-                    "default": false,
+                    "default": true,
                     "alias": "pick_wl_toggle"
                 },
                 {
                     "type": "input_string",
                     "text": "WL World Name",
-                    "default": "",
+                    "default": "PLATSAVEHAM",
                     "icon": "Edit",
                     "alias": "pick_wl_world"
                 },
                 {
                     "type": "input_string",
                     "text": "WL Door ID",
-                    "default": "",
+                    "default": "12345",
                     "icon": "Edit",
                     "alias": "pick_wl_doorid"
                 },
@@ -1378,20 +1429,20 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Pick Platform",
-                    "default": false,
+                    "default": true,
                     "alias": "pick_plat_toggle"
                 },
                 {
                     "type": "input_string",
                     "text": "Plat World Name",
-                    "default": "PHINIS",
+                    "default": "PLATSAVEHAM",
                     "icon": "Edit",
                     "alias": "pick_plat_world"
                 },
                 {
                     "type": "input_string",
                     "text": "Plat Door ID",
-                    "default": "DoorID",
+                    "default": "12345",
                     "icon": "Edit",
                     "alias": "pick_plat_doorid"
                 },
@@ -1425,10 +1476,11 @@ function onValue(type_evt, name, value)
         local worlds = {}
         for w in tostring(value):gmatch("[^,%s]+") do table.insert(worlds, w) end
         if #worlds > 0 then 
-            Config.World.nameworld = worlds 
-            if index_world > #Config.World.nameworld then index_world = 1 end
+            WorldList = worlds 
+            if index_world > #WorldList then index_world = 1 end
         end
     elseif name == "autodf_worlddoor" then DFWorldDoor = tostring(value)
+    elseif name == "autodf_worldsaveseed" then worldsaveseed = tostring(value)
     elseif name == "autodf_use_random" then UseRandomDF = value
     elseif name == "rand_length" then RandLength = tonumber(value) or 5
     elseif name == "rand_with_number" then RandWithNumber = value
@@ -1478,8 +1530,12 @@ function onValue(type_evt, name, value)
     elseif name == "pick_wl_id" then PickWL_ID = tonumber(value) or 242
     
     elseif name == "pick_plat_toggle" then PickPlat_Enabled = value
-    elseif name == "pick_plat_world" then PickPlat_World = tostring(value)
-    elseif name == "pick_plat_doorid" then PickPlat_Door = tostring(value)
+    elseif name == "pick_plat_world" then 
+        PickPlat_World = tostring(value)
+        StoragePlatWorld = tostring(value)
+    elseif name == "pick_plat_doorid" then 
+        PickPlat_Door = tostring(value)
+        StoragePlatDoor = tostring(value)
     elseif name == "pick_plat_id" then PickPlat_ID = tonumber(value) or PlatformID
     
     elseif name == "btn_itemfinder" then openItemFinderDialog()
@@ -1503,7 +1559,7 @@ end
 addHook(onSendPacket, "onSendPacket")
 applyHook()
 
-sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master `wCreated By `9Freazd"})
+sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master Sync Ready `wCreated By `9Freazd"})
 
 runCoroutine(function()
     while true do
