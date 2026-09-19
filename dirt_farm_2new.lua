@@ -1187,7 +1187,7 @@ function openItemFinderDialog()
 OnDialogRequest
 set_default_color|`b
 add_label_with_icon|big|`bFind `eId Item|left|12168|
-add_smalltext|`eScript By Freazd|
+add_smalltext|`eScript By LOLIStore|
 add_spacer|small|
 add_item_picker|idt|`eSelect `wOne of the Items |`eSelect an item to find the ID :|
 add_spacer|small|
@@ -1224,7 +1224,7 @@ function handleItemPickerResponse(type_pkt, pkt)
 OnDialogRequest
 set_default_color|`b
 add_label_with_icon|big|`bFound `eItem ID|left|13818|
-add_smalltext|`eScript By Freazd|
+add_smalltext|`eScript By LOLIStore|
 add_spacer|small|
 add_button_with_icon|p|`wItem icon|staticBlueFrames|]] .. pick .. [[||
 add_label_with_icon|small|`wItem Name : `e]] .. nam1 .. [[|left|2946|
@@ -1247,7 +1247,7 @@ function openMainMenu()
         v2 = table.concat({
             "set_default_color|`b",
             "add_label_with_icon|big|`bHelper `eWorld|left|242|",
-            "add_smalltext|`eScript By Freazd|",
+            "add_smalltext|`eScript By LOLIStore|",
             "add_spacer|small|",
             "add_button_with_icon|open_autodf|Auto Dirt Farm|staticBlueFrames|2||",
             "add_button_with_icon|open_itemfinder|Find Id Item|staticBlueFrames|12168||",
@@ -1274,13 +1274,13 @@ end
 -- ==========================================
 local module_json = [[
 {
-    "sub_name": "Helper World (DF)",
+    "sub_name": "Script World (DF)",
     "icon": "Verified",
     "menu": [
         {
             "type": "labelapp",
             "icon": "Verified",
-            "text": "Script By Freazd"
+            "text": "Script By LOLIStore"
         },
         {
             "type": "divider"
@@ -1715,7 +1715,7 @@ end
 addHook(onSendPacket, "onSendPacket")
 applyHook()
 
-sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master Fully Patched v5 `wCreated By `9Freazd"})
+sendVariant({v1 = "OnTextOverlay", v2 = "`9Script Dirt Farm `wby `2LOLIStore"})
 
 runCoroutine(function()
     while true do
