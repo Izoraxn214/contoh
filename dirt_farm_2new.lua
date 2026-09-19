@@ -36,7 +36,7 @@ VerifyPunch = false
 
 DFWorldDoor = "IWP2145"
 
--- LOGIKA BARU: TOGGLE & SLOTS DROP/TRASH
+-- LOGIKA TOGGLE & SLOTS DROP/TRASH
 AutoDropEnabled = true
 AutoTrashEnabled = false
 
@@ -53,6 +53,14 @@ ItemSlots = {
     { id = 14, min = 50,  x = 39, y = 11 },
     { id = 0,  min = 0,   x = 0,  y = 0  }
 }
+
+-- DISCORD WEBHOOK VARIABLES
+WebhookEnabled = false
+WebhookURL = ""
+WebhookUserID = ""
+
+botStartTime = os.time()
+worldStartTime = os.time()
 
 AutoPickEnabled = true
 AutoFind_Enabled = true
@@ -76,6 +84,77 @@ math.randomseed(os.time())
 local function isUnbreakable(fg)
     local id = tonumber(fg) or 0
     return id == 8 or id == 6 or id == 242 or id == 202 or id == 204 or id == 206 or id == 2408 or id == 4994 or id == 1790
+end
+
+local function formatTime(seconds)
+    local hours = math.floor(seconds / 3600)
+    local mins = math.floor((seconds % 3600) / 60)
+    local secs = math.floor(seconds % 60)
+    return string.format("%02d:%02d:%02d", hours, mins, secs)
+end
+
+local function sendDiscordWebhookEmbed(statusType, customMessage)
+    if not WebhookEnabled or WebhookURL == "" or not WebhookURL:find("http") then return end
+
+    local pName = "Unknown"
+    local p = getLocal()
+    if p and p.name then pName = p.name end
+
+    local execTimeStr = formatTime(os.time() - worldStartTime)
+    local uptimeStr = formatTime(os.time() - botStartTime)
+    local progressStr = index_world .. " / " .. #WorldList
+
+    local title = "DIRT FARM COMPLETED"
+    local color = 3066993 -- Hijau
+    local statusDesc = "100% Cleared & Sealed"
+
+    if statusType == "STARTED" then
+        title = "DIRT FARM STARTED"
+        color = 3447003 -- Biru
+        statusDesc = "Working..."
+    elseif statusType == "WARNING" or statusType == "ERROR" then
+        title = "DIRT FARM ALERT"
+        color = 15158332 -- Merah
+        statusDesc = customMessage or "Need Attention!"
+    end
+
+    local pingText = ""
+    if WebhookUserID ~= "" and (statusType == "WARNING" or statusType == "ERROR") then
+        pingText = "<@" .. WebhookUserID .. "> "
+    end
+
+    local jsonPayload = string.format([[
+    {
+      "content": "%s",
+      "username": "LOLIStore Helper",
+      "embeds": [
+        {
+          "title": "%s",
+          "color": %d,
+          "fields": [
+            { "name": "Account", "value": "%s", "inline": true },
+            { "name": "World", "value": "%s", "inline": true },
+            { "name": "Progress", "value": "%s", "inline": true },
+            { "name": "Execute Time", "value": "%s", "inline": true },
+            { "name": "Total Uptime", "value": "%s", "inline": true },
+            { "name": "Status", "value": "%s", "inline": true }
+          ],
+          "footer": {
+            "text": "Script Dirt Farm by LOLIStore • %s"
+          }
+        }
+      ]
+    }]], pingText, title, color, pName, nameworld, progressStr, execTimeStr, uptimeStr, statusDesc, os.date("%Y-%m-%d %H:%M:%S"))
+
+    pcall(function()
+        if type(makeRequest) == "function" then
+            makeRequest(WebhookURL, "POST", {["Content-Type"] = "application/json"}, jsonPayload)
+        elseif type(httpPost) == "function" then
+            httpPost(WebhookURL, jsonPayload)
+        elseif type(httpRequest) == "function" then
+            httpRequest(WebhookURL, "POST", jsonPayload)
+        end
+    end)
 end
 
 local function generateRandomWorld(length, withNum)
@@ -340,6 +419,7 @@ function ensureSetupItems()
 
         if targetStorageWorld == "" then
             LogToConsole("`4[`0Setup Error`4] World Storage WL/Door belum diisi di menu Auto Pick!")
+            sendDiscordWebhookEmbed("WARNING", "World Storage WL/Door belum diisi!")
             return
         end
 
@@ -459,13 +539,11 @@ function setupNewRandomWorld()
     return true
 end
 
--- PENGERJAAN BARU: DROP & TRASH BERDASARKAN PRIORITAS
 function processAutoDropAndTrash()
     if not autoDF_running then return end
 
-    -- Tentukan Mode Aktif
     local useTrash = AutoTrashEnabled
-    local useDrop = AutoDropEnabled and not AutoTrashEnabled -- Prioritas ke Trash jika keduanya ON
+    local useDrop = AutoDropEnabled and not AutoTrashEnabled
 
     if not useTrash and not useDrop then return end
 
@@ -479,14 +557,12 @@ function processAutoDropAndTrash()
             local jml = inv(slot.id)
             if jml >= slot.min then
                 if useTrash then
-                    -- MODE TRASH: Langsung Trash di tempat tanpa warp (Realtime)
                     LogToConsole("`w[`0Auto Trash`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Melakukan Trash...")
                     sendPacket(2, "action|trash\nitemID|" .. slot.id)
                     Sleep(100)
                     sendPacket(2, "action|dialog_return\ndialog_name|trash_item\nitemID|" .. slot.id .. "|\ncount|" .. jml)
                     Sleep(1000)
                 elseif useDrop then
-                    -- MODE DROP: Warp ke World Drop -> Jalan ke X,Y -> Drop
                     if DropWorld ~= "" then
                         LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Meluncur ke World Drop: " .. DropWorld)
                         warp(DropWorld, DropDoor)
@@ -602,6 +678,7 @@ function ambilSeed(id, jumlah)
 
         if inv(id) <= initialAmount then
             LogToConsole("`4[`0Warning`4] Stok item di Storage habis atau gagal dipungut! Melanjutkan...")
+            sendDiscordWebhookEmbed("WARNING", "Stok Seed/Item (" .. id .. ") di Storage habis!")
         end
     end
 end
@@ -724,6 +801,7 @@ function plfS_15()
     if inv(PlatformID) < 52 then
         if StoragePlatWorld == "" then
             LogToConsole("`4[`0Plat Error`4] Nama World Storage Platform belum diisi!")
+            sendDiscordWebhookEmbed("WARNING", "World Storage Platform belum diisi!")
             return
         end
 
@@ -1099,6 +1177,8 @@ function mainDF()
     if not autoDF_running then return end
     if not nameworld or nameworld == "" then return end
 
+    worldStartTime = os.time()
+
     warpDFWorld(nameworld)
     Sleep(6000)
     LogToConsole("`w[`0Auto DF`w] Masuk world: " .. tostring(nameworld))
@@ -1119,6 +1199,8 @@ function mainDF()
         return 
     end
     
+    sendDiscordWebhookEmbed("STARTED")
+
     smpng_12()
     if not autoDF_running then return end
     
@@ -1150,8 +1232,10 @@ function mainDF()
     if verifyAndPatchWorld() then
         writeToLocal("finished_df.txt", os.date("[%Y-%m-%d %H:%M] ") .. nameworld .. "\n")
         LogToConsole("`w[`2SUCCESS`w] World " .. nameworld .. " selesai & dicatat ke finished_df.txt!")
+        sendDiscordWebhookEmbed("COMPLETED")
     else
         LogToConsole("`4[`0Warning`4] World " .. nameworld .. " masih ada bagian belum tertutup sempurna setelah 3x penambalan!")
+        sendDiscordWebhookEmbed("WARNING", "World gagal ditutup sempurna setelah 3x penambalan!")
     end
 end
 
@@ -1270,11 +1354,11 @@ function handleMenuDialog(type_pkt, pkt)
 end
 
 -- ==========================================
--- GROWLAUNCHER MODULE UI (STRUCTURED 8 SLOTS)
+-- GROWLAUNCHER MODULE UI (JSON NATIVE)
 -- ==========================================
 local module_json = [[
 {
-    "sub_name": "Script World (DF)",
+    "sub_name": "Helper World (DF)",
     "icon": "Verified",
     "menu": [
         {
@@ -1396,9 +1480,40 @@ local module_json = [[
         },
         {
             "type": "toggle",
-            "text": "📍 Cek Posisi Saya Sekarang (Console Log)",
+            "text": "Cek Posisi Saya Sekarang (Console Log)",
             "default": false,
             "alias": "toggle_pos_check"
+        },
+        {
+            "type": "divider"
+        },
+        {
+            "type": "dialog",
+            "text": "Discord Webhook Setting",
+            "support_text": "Pengaturan Notifikasi Discord",
+            "fill": true,
+            "menu": [
+                {
+                    "type": "toggle",
+                    "text": "Enable Discord Webhook",
+                    "default": false,
+                    "alias": "webhook_toggle"
+                },
+                {
+                    "type": "input_string",
+                    "text": "Discord Webhook URL",
+                    "default": "",
+                    "icon": "Edit",
+                    "alias": "webhook_url"
+                },
+                {
+                    "type": "input_string",
+                    "text": "Discord User ID (Ping on Alert)",
+                    "default": "",
+                    "icon": "Edit",
+                    "alias": "webhook_userid"
+                }
+            ]
         },
         {
             "type": "divider"
@@ -1646,6 +1761,10 @@ function onValue(type_evt, name, value)
     elseif name == "autodf_delaybreak" then dbk = math.floor(tonumber(value) or dbk)
     elseif name == "autodf_delayplace" then dpc = math.floor(tonumber(value) or dpc)
     
+    elseif name == "webhook_toggle" then WebhookEnabled = value
+    elseif name == "webhook_url" then WebhookURL = tostring(value)
+    elseif name == "webhook_userid" then WebhookUserID = tostring(value)
+
     elseif name == "toggle_pos_check" then
         if value then
             local p = getLocal()
@@ -1664,7 +1783,6 @@ function onValue(type_evt, name, value)
     elseif name == "drop_world" then DropWorld = tostring(value)
     elseif name == "drop_door" then DropDoor = tostring(value)
 
-    -- HANDLER DYNAMIC UNTUK 8 SLOT ITEM
     elseif name:find("^item(%d+)_([%w_]+)$") then
         local idxStr, prop = name:match("^item(%d+)_([%w_]+)$")
         local idx = tonumber(idxStr)
@@ -1699,6 +1817,7 @@ function onValue(type_evt, name, value)
     elseif name == "btn_autodf" then
         autoDF_running = value
         if value == true then
+            botStartTime = os.time()
             LogToConsole("`w[`0Auto DF`w] Konfigurasi aman & siap dikerjakan!")
         else
             StopAll()
