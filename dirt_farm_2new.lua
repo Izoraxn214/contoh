@@ -36,22 +36,21 @@ VerifyPunch = false
 
 DFWorldDoor = "IWP2145"
 
--- LOGIKA TOGGLE & SLOTS DROP/TRASH
+-- LOGIKA AUTO DROP 8 SLOTS (SAFE DIALOG TIMING)
 AutoDropEnabled = true
-AutoTrashEnabled = false
 
 DropWorld = "PLATSAVEHAM"
 DropDoor = "12345"
 
 ItemSlots = {
-    { id = 3,  min = 190, x = 26, y = 11 },
-    { id = 15, min = 190, x = 28, y = 11 },
-    { id = 5,  min = 190, x = 30, y = 11 },
-    { id = 11, min = 190, x = 32, y = 11 },
-    { id = 4,  min = 50,  x = 35, y = 11 },
-    { id = 10, min = 50,  x = 37, y = 11 },
-    { id = 14, min = 50,  x = 39, y = 11 },
-    { id = 0,  min = 0,   x = 0,  y = 0  }
+    { id = 3,  min = 190, x = 55, y = 21 }, -- Seed Dirt
+    { id = 2,  min = 190, x = 55, y = 18 }, -- Dirt
+    { id = 15, min = 190, x = 47, y = 21 }, -- Seed Cave
+    { id = 14, min = 50,  x = 47, y = 18 }, -- Cave
+    { id = 11, min = 190, x = 47, y = 15 }, -- Seed Rock
+    { id = 10, min = 50,  x = 47, y = 12 }, -- Rock
+    { id = 5,  min = 190, x = 55, y = 15 }, -- Seed Lava
+    { id = 4,  min = 50,  x = 55, y = 12 }  -- Lava
 }
 
 -- DISCORD WEBHOOK VARIABLES
@@ -283,6 +282,7 @@ function walkTo(targetX, targetY, maxWaitMs)
     return false
 end
 
+-- FIX NO 3: DYNAMIC PACKET STATE (MENGGUNAKAN STATE ASLI KARAKTER)
 function tnjk1_3(x, y)
     if not EnableBreak or not autoDF_running then return false end
     
@@ -301,7 +301,7 @@ function tnjk1_3(x, y)
 
     local packet = {}
     packet.type = 3
-    packet.state = 2592
+    packet.state = (p and p.state) and p.state or 0 -- Dynamic state dari local player
     packet.value = 18
     packet.px = math.floor(x)
     packet.py = math.floor(y)
@@ -365,9 +365,13 @@ function sdtr_11(object)
     sendPacketRaw(false, packet)
 end
 
+-- FIX NO 4: LIMIT 3 ITEM PER CYCLE + DELAY 250ms (ANTI-SPAM PACKET 11)
 function sdt_11(range)
     local localPlayer = getLocal()
     if not localPlayer then return end
+
+    local pickedCount = 0
+    local maxPickPerCycle = 3
 
     for _, object in pairs(safeGetObjectList()) do
         if object then
@@ -375,7 +379,11 @@ function sdt_11(range)
             if math.abs(localPlayer.posX - (object.posX or 0)) <= (32 * range) and
                math.abs(localPlayer.posY - (object.posY or 0)) < (32 * range) and inv(itemID) < 200 then
                 sdtr_11(object)
-                Sleep(120)
+                pickedCount = pickedCount + 1
+                Sleep(250) -- Delay dinaikkan agar natural
+                if pickedCount >= maxPickPerCycle then
+                    break
+                end
             end
         end
     end
@@ -539,13 +547,9 @@ function setupNewRandomWorld()
     return true
 end
 
+-- FIX NO 1: AUTO DROP JEDA 600ms MENUNGGU DIALOG RESMI SERVER
 function processAutoDropAndTrash()
-    if not autoDF_running then return end
-
-    local useTrash = AutoTrashEnabled
-    local useDrop = AutoDropEnabled and not AutoTrashEnabled
-
-    if not useTrash and not useDrop then return end
+    if not autoDF_running or not AutoDropEnabled then return end
 
     local currentWorld = safeGetWorldName()
     if currentWorld == "" then return end
@@ -555,30 +559,20 @@ function processAutoDropAndTrash()
 
         if slot.id > 0 and slot.min > 0 then
             local jml = inv(slot.id)
-            if jml >= slot.min then
-                if useTrash then
-                    LogToConsole("`w[`0Auto Trash`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Melakukan Trash...")
-                    sendPacket(2, "action|trash\nitemID|" .. slot.id)
-                    Sleep(100)
-                    sendPacket(2, "action|dialog_return\ndialog_name|trash_item\nitemID|" .. slot.id .. "|\ncount|" .. jml)
-                    Sleep(1000)
-                elseif useDrop then
-                    if DropWorld ~= "" then
-                        LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Meluncur ke World Drop: " .. DropWorld)
-                        warp(DropWorld, DropDoor)
-                        Sleep(6000)
-                        waitForTilesToLoad()
-                        walkTo(slot.x, slot.y, 2000)
-                        Sleep(1000)
-                        sendPacket(2, "action|drop\nitemID|" .. slot.id)
-                        Sleep(100)
-                        sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. slot.id .. "|\ncount|" .. jml)
-                        Sleep(2000)
-                        warpDFWorld(currentWorld)
-                        Sleep(6000)
-                        waitForTilesToLoad()
-                    end
-                end
+            if jml >= slot.min and DropWorld ~= "" then
+                LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Meluncur ke World Drop: " .. DropWorld)
+                warp(DropWorld, DropDoor)
+                Sleep(6000)
+                waitForTilesToLoad()
+                walkTo(slot.x, slot.y, 2000)
+                Sleep(1000)
+                sendPacket(2, "action|drop\nitemID|" .. slot.id)
+                Sleep(600) -- Jeda aman menunggu server membuka dialog secara resmi
+                sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. slot.id .. "|\ncount|" .. jml)
+                Sleep(2000)
+                warpDFWorld(currentWorld)
+                Sleep(6000)
+                waitForTilesToLoad()
             end
         end
     end
@@ -587,7 +581,7 @@ end
 function processAutoPick()
     if not autoDF_running then return end
     if AutoPickEnabled and AutoFind_Enabled then
-        sdt_11(10)
+        sdt_11(5)
     end
     processAutoDropAndTrash()
 end
@@ -708,7 +702,7 @@ function plntDf_122()
                     tnjk1_3(tilex, 23)
                     Sleep(dbk)
                 end
-                sdt_11(3)
+                sdt_11(5)
                 processAutoDropAndTrash()
             end
 
@@ -1078,7 +1072,7 @@ function clearLeftoverSafe()
                     tnjk1_3(tilex, tiley)
                     Sleep(dbk)
                 end
-                sdt_11(3)
+                sdt_11(5)
                 processAutoDropAndTrash()
             end
 
@@ -1113,6 +1107,7 @@ function isWorldAlreadyDone()
                 unclearedCount = unclearedCount + 1
             end
         end
+        Sleep(5)
     end
 
     for tiley = 2, 23 do
@@ -1122,6 +1117,7 @@ function isWorldAlreadyDone()
                 emptySkyCount = emptySkyCount + 1
             end
         end
+        Sleep(5)
     end
 
     LogToConsole("`w[`0Audit Total 100%`w] Gua Kotor: `e" .. unclearedCount .. "`w ubin | Langit Kosong: `e" .. emptySkyCount .. "`w ubin")
@@ -1520,8 +1516,8 @@ local module_json = [[
         },
         {
             "type": "dialog",
-            "text": "Drop & Trash Item Setting (8 Slots)",
-            "support_text": "Pengaturan Slot Drop / Trash Item",
+            "text": "Drop Item Setting (8 Slots)",
+            "support_text": "Pengaturan Slot Drop Item",
             "fill": true,
             "menu": [
                 {
@@ -1529,12 +1525,6 @@ local module_json = [[
                     "text": "Drop Item",
                     "default": true,
                     "alias": "autodrop_toggle"
-                },
-                {
-                    "type": "toggle",
-                    "text": "Trash Item",
-                    "default": false,
-                    "alias": "autotrash_toggle"
                 },
                 {
                     "type": "input_string",
@@ -1551,60 +1541,60 @@ local module_json = [[
                     "alias": "drop_door"
                 },
                 { "type": "divider" },
-                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 1 ---" },
+                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 1 (Seed Dirt) ---" },
                 { "type": "input_int", "text": "ID Item 1", "default": "3", "alias": "item1_id" },
-                { "type": "input_int", "text": "Minimal Drop/Trash", "default": "190", "alias": "item1_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "26", "alias": "item1_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "11", "alias": "item1_y" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item1_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "55", "alias": "item1_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "21", "alias": "item1_y" },
 
                 { "type": "divider" },
-                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 2 ---" },
-                { "type": "input_int", "text": "ID Item 2", "default": "15", "alias": "item2_id" },
-                { "type": "input_int", "text": "Minimal Drop/Trash", "default": "190", "alias": "item2_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "28", "alias": "item2_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "11", "alias": "item2_y" },
+                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 2 (Dirt Block) ---" },
+                { "type": "input_int", "text": "ID Item 2", "default": "2", "alias": "item2_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item2_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "55", "alias": "item2_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "18", "alias": "item2_y" },
 
                 { "type": "divider" },
-                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 3 ---" },
-                { "type": "input_int", "text": "ID Item 3", "default": "5", "alias": "item3_id" },
-                { "type": "input_int", "text": "Minimal Drop/Trash", "default": "190", "alias": "item3_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "30", "alias": "item3_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "11", "alias": "item3_y" },
+                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 3 (Seed Cave) ---" },
+                { "type": "input_int", "text": "ID Item 3", "default": "15", "alias": "item3_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item3_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "47", "alias": "item3_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "21", "alias": "item3_y" },
 
                 { "type": "divider" },
-                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 4 ---" },
-                { "type": "input_int", "text": "ID Item 4", "default": "11", "alias": "item4_id" },
-                { "type": "input_int", "text": "Minimal Drop/Trash", "default": "190", "alias": "item4_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "32", "alias": "item4_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "11", "alias": "item4_y" },
+                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 4 (Cave Block) ---" },
+                { "type": "input_int", "text": "ID Item 4", "default": "14", "alias": "item4_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "50", "alias": "item4_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "47", "alias": "item4_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "18", "alias": "item4_y" },
 
                 { "type": "divider" },
-                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 5 ---" },
-                { "type": "input_int", "text": "ID Item 5", "default": "4", "alias": "item5_id" },
-                { "type": "input_int", "text": "Minimal Drop/Trash", "default": "50", "alias": "item5_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "35", "alias": "item5_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "11", "alias": "item5_y" },
+                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 5 (Seed Rock) ---" },
+                { "type": "input_int", "text": "ID Item 5", "default": "11", "alias": "item5_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item5_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "47", "alias": "item5_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "15", "alias": "item5_y" },
 
                 { "type": "divider" },
-                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 6 ---" },
+                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 6 (Rock Block) ---" },
                 { "type": "input_int", "text": "ID Item 6", "default": "10", "alias": "item6_id" },
-                { "type": "input_int", "text": "Minimal Drop/Trash", "default": "50", "alias": "item6_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "37", "alias": "item6_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "11", "alias": "item6_y" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "50", "alias": "item6_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "47", "alias": "item6_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "12", "alias": "item6_y" },
 
                 { "type": "divider" },
-                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 7 ---" },
-                { "type": "input_int", "text": "ID Item 7", "default": "14", "alias": "item7_id" },
-                { "type": "input_int", "text": "Minimal Drop/Trash", "default": "50", "alias": "item7_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "39", "alias": "item7_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "11", "alias": "item7_y" },
+                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 7 (Seed Lava) ---" },
+                { "type": "input_int", "text": "ID Item 7", "default": "5", "alias": "item7_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item7_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "55", "alias": "item7_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "15", "alias": "item7_y" },
 
                 { "type": "divider" },
-                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 8 ---" },
-                { "type": "input_int", "text": "ID Item 8", "default": "0", "alias": "item8_id" },
-                { "type": "input_int", "text": "Minimal Drop/Trash", "default": "0", "alias": "item8_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "0", "alias": "item8_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "0", "alias": "item8_y" }
+                { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 8 (Lava Block) ---" },
+                { "type": "input_int", "text": "ID Item 8", "default": "4", "alias": "item8_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "50", "alias": "item8_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "55", "alias": "item8_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "12", "alias": "item8_y" }
             ]
         },
         {
@@ -1779,7 +1769,6 @@ function onValue(type_evt, name, value)
         end
 
     elseif name == "autodrop_toggle" then AutoDropEnabled = value
-    elseif name == "autotrash_toggle" then AutoTrashEnabled = value
     elseif name == "drop_world" then DropWorld = tostring(value)
     elseif name == "drop_door" then DropDoor = tostring(value)
 
