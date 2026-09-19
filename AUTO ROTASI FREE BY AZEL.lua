@@ -1,5 +1,5 @@
 local Preferences = require("preferences")
-local pref = Preferences:new("rotasi_free_azel_config.json") --[cite: 8]
+local pref = Preferences:new("rotasi_free_azel_config.json")
 
 local config = {
     block_id           = pref:get("block_id",           0),
@@ -36,7 +36,7 @@ local function sendWebhook(msg)
     if not config.webhook_url or config.webhook_url == "" then return end
     pcall(function()
         local payload = '{"content": "' .. tostring(msg) .. '"}'
-        fetch(config.webhook_url, { --[cite: 5]
+        fetch(config.webhook_url, {
             method  = "POST",
             headers = { ["Content-Type"] = "application/json" },
             body    = payload
@@ -70,7 +70,7 @@ local function HumanSleep(ms)
 end
 
 local function getPlayer()
-    local ok, p = pcall(getLocal) --[cite: 2]
+    local ok, p = pcall(getLocal)
     if ok and p then return p end
     return nil
 end
@@ -82,7 +82,7 @@ local function getPlayerTile()
 end
 
 local function safeGetPlayerList()
-    local ok, list = pcall(getPlayerList) --[cite: 2]
+    local ok, list = pcall(getPlayerList)
     if ok and type(list) == "table" then return list end
     return nil
 end
@@ -97,7 +97,7 @@ local function checkAntiPlayer(my_id)
         if p and p.netID and p.netID ~= local_p.netID then
             Log("`4[DANGER] Player lain terdeteksi! Auto exit...")
             sendWebhook("⚠️ **ALERT:** Player/Mod terdeteksi di world (**" .. tostring(p.name) .. "**)! Auto Exit ke main menu...")
-            growtopia.warpTo("EXIT") --[cite: 2]
+            growtopia.warpTo("EXIT")
             running = false
             return false
         end
@@ -127,7 +127,7 @@ local function checkWorkRestCycle(my_id)
 end
 
 local function invCount(item_id)
-    local ok, inv = pcall(getInventory) --[cite: 2]
+    local ok, inv = pcall(getInventory)
     if not ok or type(inv) ~= "table" then return 0 end
     for _, item in pairs(inv) do
         if item and item.id == item_id then return item.amount end
@@ -137,25 +137,25 @@ end
 
 local function safeGetTile(tx, ty)
     if tx < 0 or tx >= 100 or ty < 0 or ty >= 60 then return nil end
-    local ok, tile = pcall(getTile, tx, ty) --[cite: 2]
+    local ok, tile = pcall(getTile, tx, ty)
     if ok then return tile end
     return nil
 end
 
 local function safeGetTiles()
-    local ok, tiles = pcall(getTiles) --[cite: 2]
+    local ok, tiles = pcall(getTiles)
     if ok and type(tiles) == "table" then return tiles end
     return nil
 end
 
 local function safeGetObjects()
-    local ok, objs = pcall(getObjectList) --[cite: 2]
+    local ok, objs = pcall(getObjectList)
     if ok and type(objs) == "table" then return objs end
     return nil
 end
 
 local function safeGetWorldName()
-    local ok, w = pcall(GetWorldName) --[cite: 2]
+    local ok, w = pcall(GetWorldName)
     if ok and w and w ~= "" and string.upper(w) ~= "EXIT" then return w end
     return nil
 end
@@ -175,7 +175,7 @@ end
 local function punchTile(tx, ty)
     local p = getPlayer()
     if not p then return end
-    sendPacketRaw(false, { --[cite: 2]
+    sendPacketRaw(false, {
         type  = 3,
         value = 18,
         x     = p.posX,
@@ -189,7 +189,7 @@ end
 local function placeBlock(tx, ty, item_id)
     local p = getPlayer()
     if not p then return end
-    sendPacketRaw(false, { --[cite: 2]
+    sendPacketRaw(false, {
         type  = 3,
         value = item_id,
         x     = p.posX,
@@ -201,7 +201,7 @@ local function placeBlock(tx, ty, item_id)
 end
 
 local function walkTo(tx, ty)
-    FindPath(tx, ty) --[cite: 2]
+    FindPath(tx, ty)
     HumanSleep(math.random(400, 700))
     local cx, cy = getPlayerTile()
     if cx and cy then
@@ -221,7 +221,7 @@ local function collectNearby(radius_px)
             local dx = math.abs(p.posX - obj.posX)
             local dy = math.abs(p.posY - obj.posY)
             if dx < radius_px and dy < radius_px then
-                sendPacketRaw(false, { --[cite: 2]
+                sendPacketRaw(false, {
                     type  = 11,
                     value = obj.id,
                     x     = obj.posX + 6,
@@ -373,9 +373,9 @@ local function doDrop()
     walkTo(config.drop_x, config.drop_y)
     rSleep(400, 700)
 
-    sendPacket(2, "action|drop\nitemID|" .. seed_id .. "\n") --[cite: 2]
+    sendPacket(2, "action|drop\nitemID|" .. seed_id .. "\n")
     rSleep(300, 500)
-    sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. seed_id .. "|\ncount|" .. amount .. "\n") --[cite: 2]
+    sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. seed_id .. "|\ncount|" .. amount .. "\n")
     rSleep(400, 700)
 
     if invCount(seed_id) < amount then
@@ -473,7 +473,7 @@ local function reconnectMonitor(my_id)
             while running and (thread_instance == my_id) do
                 Sleep(math.random(1800, 2500))
                 if back_target and back_target ~= "" then
-                    growtopia.warpTo(back_target) --[cite: 2]
+                    growtopia.warpTo(back_target)
                 end
                 
                 local elapsed = 0
@@ -519,7 +519,7 @@ local function mainLoop(my_id)
     Log("ROTASI MULAI!")
     sendWebhook("🚀 **BOT STARTED:** Auto Rotasi diaktifkan di world **" .. tostring(config.farm_world) .. "**")
 
-    runThread(function() reconnectMonitor(my_id) end) --[cite: 2]
+    runThread(function() reconnectMonitor(my_id) end)
 
     if invCount(config.block_id) >= config.high_trigger then
         local pnb_result = doPnb(my_id)
@@ -558,44 +558,44 @@ local function mainLoop(my_id)
     end
 end
 
-local ui = UserInterface.new("Auto Rotasi Free", "Ability") --[cite: 3]
+local ui = UserInterface.new("Auto Rotasi Free", "Ability")
 
-ui:addLabelApp("AUTO ROTASI FREE BY AZEL", "Ability") --[cite: 3]
-ui:addDivider() --[cite: 3]
+ui:addLabelApp("AUTO ROTASI FREE BY AZEL", "Ability")
+ui:addDivider()
 
-local dialog_main = ui:addDialog("Main Config", "Setting utama rotasi", {}) --[cite: 3]
-ui:addChildInputInt(dialog_main.menu,    "Block ID",     config.block_id,     "ID",   "ID block (bukan seed)",             "Verified", "block_id") --[cite: 3]
-ui:addChildInputInt(dialog_main.menu,    "High Trigger", config.high_trigger, "amt",  "seed>=ini->Drop (def:180)",         "Verified", "high_trigger") --[cite: 3]
-ui:addChildInputInt(dialog_main.menu,    "Low Trigger",  config.low_trigger,  "amt",  "block/seed<=ini->stop (def:10)",    "Verified", "low_trigger") --[cite: 3]
-ui:addChildInputString(dialog_main.menu, "Door Farm",    config.farm_door,    "ID",   "link/path world farm",              "World",    "farm_door") --[cite: 3]
+local dialog_main = ui:addDialog("Main Config", "Setting utama rotasi", {})
+ui:addChildInputInt(dialog_main.menu,    "Block ID",     config.block_id,     "ID",   "ID block (bukan seed)",             "Verified", "block_id")
+ui:addChildInputInt(dialog_main.menu,    "High Trigger", config.high_trigger, "amt",  "seed>=ini->Drop (def:180)",         "Verified", "high_trigger")
+ui:addChildInputInt(dialog_main.menu,    "Low Trigger",  config.low_trigger,  "amt",  "block/seed<=ini->stop (def:10)",    "Verified", "low_trigger")
+ui:addChildInputString(dialog_main.menu, "Door Farm",    config.farm_door,    "ID",   "link/path world farm",              "World",    "farm_door")
 
-ui:addDivider() --[cite: 3]
+ui:addDivider()
 
-local dialog_pnb = ui:addDialog("PnB Position", "Berdiri di posisi PnB dulu sebelum set", {}) --[cite: 3]
-ui:addChildInputInt(dialog_pnb.menu, "PnB X", config.pnb_x, "X", "koordinat X", "Verified", "pnb_x") --[cite: 3]
-ui:addChildInputInt(dialog_pnb.menu, "PnB Y", config.pnb_y, "Y", "koordinat Y", "Verified", "pnb_y") --[cite: 3]
-ui:addChildButton(dialog_pnb.menu, "Set dari posisi sekarang", "btn_pnb_set") --[cite: 3]
+local dialog_pnb = ui:addDialog("PnB Position", "Berdiri di posisi PnB dulu sebelum set", {})
+ui:addChildInputInt(dialog_pnb.menu, "PnB X", config.pnb_x, "X", "koordinat X", "Verified", "pnb_x")
+ui:addChildInputInt(dialog_pnb.menu, "PnB Y", config.pnb_y, "Y", "koordinat Y", "Verified", "pnb_y")
+ui:addChildButton(dialog_pnb.menu, "Set dari posisi sekarang", "btn_pnb_set")
 
-ui:addDivider() --[cite: 3]
+ui:addDivider()
 
-local dialog_drop = ui:addDialog("Drop Config", "Posisi drop seed di world farm", {}) --[cite: 3]
-ui:addChildInputInt(dialog_drop.menu, "Drop X", config.drop_x, "X", "koordinat X drop", "Verified", "drop_x") --[cite: 3]
-ui:addChildInputInt(dialog_drop.menu, "Drop Y", config.drop_y, "Y", "koordinat Y drop", "Verified", "drop_y") --[cite: 3]
-ui:addChildButton(dialog_drop.menu, "Set dari posisi sekarang", "btn_drop_set") --[cite: 3]
+local dialog_drop = ui:addDialog("Drop Config", "Posisi drop seed di world farm", {})
+ui:addChildInputInt(dialog_drop.menu, "Drop X", config.drop_x, "X", "koordinat X drop", "Verified", "drop_x")
+ui:addChildInputInt(dialog_drop.menu, "Drop Y", config.drop_y, "Y", "koordinat Y drop", "Verified", "drop_y")
+ui:addChildButton(dialog_drop.menu, "Set dari posisi sekarang", "btn_drop_set")
 
-ui:addDivider() --[cite: 3]
+ui:addDivider()
 
-local dialog_sec = ui:addDialog("Security & Anti-Ban", "Proteksi akun & notifikasi", {}) --[cite: 3]
-ui:addChildInputString(dialog_sec.menu, "Webhook Discord",      config.webhook_url,        "URL", "https://discord.com/api/webhooks/...", "Verified", "webhook_url") --[cite: 3]
-ui:addChildToggle(dialog_sec.menu,      "Anti Player/Mod",      config.enable_anti_player, "enable_anti_player") --[cite: 3]
-ui:addChildInputInt(dialog_sec.menu,    "Jam Kerja (Menit)",    config.work_min,           "min", "Durasi kerja sebelum istirahat",        "Verified", "work_min") --[cite: 3]
-ui:addChildInputInt(dialog_sec.menu,    "Jam Istirahat (Menit)", config.rest_min,          "min", "Durasi istirahat/AFK",                "Verified", "rest_min") --[cite: 3]
-ui:addChildToggle(dialog_sec.menu,      "Human Micro-Jitter",   config.enable_jitter,      "enable_jitter") --[cite: 3]
+local dialog_sec = ui:addDialog("Security & Anti-Ban", "Proteksi akun & notifikasi", {})
+ui:addChildInputString(dialog_sec.menu, "Webhook Discord",      config.webhook_url,        "URL", "https://discord.com/api/webhooks/...", "Verified", "webhook_url")
+ui:addChildToggle(dialog_sec.menu,      "Anti Player/Mod",      config.enable_anti_player, "enable_anti_player")
+ui:addChildInputInt(dialog_sec.menu,    "Jam Kerja (Menit)",    config.work_min,           "min", "Durasi kerja sebelum istirahat",        "Verified", "work_min")
+ui:addChildInputInt(dialog_sec.menu,    "Jam Istirahat (Menit)", config.rest_min,          "min", "Durasi istirahat/AFK",                "Verified", "rest_min")
+ui:addChildToggle(dialog_sec.menu,      "Human Micro-Jitter",   config.enable_jitter,      "enable_jitter")
 
-ui:addDivider() --[cite: 3]
-ui:addButton("Apply Config", "btn_apply") --[cite: 3]
-ui:addDivider() --[cite: 3]
-ui:addToggleButton("Start / Stop", false, "btn_start") --[cite: 3]
+ui:addDivider()
+ui:addButton("Apply Config", "btn_apply")
+ui:addDivider()
+ui:addToggleButton("Start / Stop", false, "btn_start")
 
 local temp = {
     block_id           = tostring(config.block_id),
@@ -614,10 +614,10 @@ local temp = {
 }
 
 function OnDraw(d)
-    removeHook("onDraw") --[cite: 2]
-    runCoroutine(function() --[cite: 2]
-        Sleep(2000) --[cite: 2]
-        addIntoModule(ui:generateJSON(), "Farm") --[cite: 2, 3]
+    removeHook("onDraw")
+    runCoroutine(function()
+        Sleep(2000)
+        addIntoModule(ui:generateJSON(), "Farm")
     end)
 end
 
@@ -645,9 +645,9 @@ function OnValue(type, name, value)
             temp.pnb_y   = tostring(cy)
             config.pnb_x = cx
             config.pnb_y = cy
-            editValue("pnb_x", cx) --[cite: 2]
-            editValue("pnb_y", cy) --[cite: 2]
-            growtopia.notify("PnB set: X=" .. cx .. " Y=" .. cy) --[cite: 2]
+            editValue("pnb_x", cx)
+            editValue("pnb_y", cy)
+            growtopia.notify("PnB set: X=" .. cx .. " Y=" .. cy)
         end
 
     elseif name == "btn_drop_set" then
@@ -659,9 +659,9 @@ function OnValue(type, name, value)
             temp.drop_y   = tostring(cy)
             config.drop_x = cx
             config.drop_y = cy
-            editValue("drop_x", cx) --[cite: 2]
-            editValue("drop_y", cy) --[cite: 2]
-            growtopia.notify("Drop set: X=" .. cx .. " Y=" .. cy) --[cite: 2]
+            editValue("drop_x", cx)
+            editValue("drop_y", cy)
+            growtopia.notify("Drop set: X=" .. cx .. " Y=" .. cy)
         end
 
     elseif name == "btn_apply" then
@@ -681,38 +681,38 @@ function OnValue(type, name, value)
 
         seed_id = config.block_id + 1
 
-        pref:set("block_id",           config.block_id) --[cite: 8]
-        pref:set("high_trigger",       config.high_trigger) --[cite: 8]
-        pref:set("low_trigger",        config.low_trigger) --[cite: 8]
-        pref:set("farm_door",          config.farm_door) --[cite: 8]
-        pref:set("pnb_x",              config.pnb_x) --[cite: 8]
-        pref:set("pnb_y",              config.pnb_y) --[cite: 8]
-        pref:set("drop_x",             config.drop_x) --[cite: 8]
-        pref:set("drop_y",             config.drop_y) --[cite: 8]
-        pref:set("webhook_url",        config.webhook_url) --[cite: 8]
-        pref:set("enable_anti_player", config.enable_anti_player) --[cite: 8]
-        pref:set("work_min",           config.work_min) --[cite: 8]
-        pref:set("rest_min",           config.rest_min) --[cite: 8]
-        pref:set("enable_jitter",      config.enable_jitter) --[cite: 8]
-        pref:save() --[cite: 8]
+        pref:set("block_id",           config.block_id)
+        pref:set("high_trigger",       config.high_trigger)
+        pref:set("low_trigger",        config.low_trigger)
+        pref:set("farm_door",          config.farm_door)
+        pref:set("pnb_x",              config.pnb_x)
+        pref:set("pnb_y",              config.pnb_y)
+        pref:set("drop_x",             config.drop_x)
+        pref:set("drop_y",             config.drop_y)
+        pref:set("webhook_url",        config.webhook_url)
+        pref:set("enable_anti_player", config.enable_anti_player)
+        pref:set("work_min",           config.work_min)
+        pref:set("rest_min",           config.rest_min)
+        pref:set("enable_jitter",      config.enable_jitter)
+        pref:save()
 
-        growtopia.notify("Config & Security tersimpan!") --[cite: 2]
+        growtopia.notify("Config & Security tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
             if config.block_id == 0 then
-                growtopia.notify("Isi Block ID dulu!") --[cite: 2]
-                editValue("btn_start", false) --[cite: 2]
+                growtopia.notify("Isi Block ID dulu!")
+                editValue("btn_start", false)
                 return
             end
             if config.pnb_x == 0 and config.pnb_y == 0 then
-                growtopia.notify("Set posisi PnB dulu!") --[cite: 2]
-                editValue("btn_start", false) --[cite: 2]
+                growtopia.notify("Set posisi PnB dulu!")
+                editValue("btn_start", false)
                 return
             end
             if config.drop_x == 0 and config.drop_y == 0 then
-                growtopia.notify("Set posisi Drop dulu!") --[cite: 2]
-                editValue("btn_start", false) --[cite: 2]
+                growtopia.notify("Set posisi Drop dulu!")
+                editValue("btn_start", false)
                 return
             end
 
@@ -725,10 +725,10 @@ function OnValue(type, name, value)
             reconnecting = false
             action_count = 0
 
-            sendVariant({v1 = "OnTextOverlay", v2 = "AUTO ROTASI FREE BY AZEL"}) --[cite: 2]
+            sendVariant({v1 = "OnTextOverlay", v2 = "AUTO ROTASI FREE BY AZEL"})
             Log("AUTO ROTASI FREE BY AZEL — Started!")
 
-            runThread(function() --[cite: 2]
+            runThread(function()
                 mainLoop(current_id)
             end)
         else
@@ -740,7 +740,7 @@ function OnValue(type, name, value)
     end
 end
 
-addHook(onVariant, "onVariant") --[cite: 2]
-addHook(OnDraw, "onDraw") --[cite: 2]
-addHook(OnValue, "onValue") --[cite: 2]
-applyHook() --[cite: 2]
+addHook(onVariant, "onVariant")
+addHook(OnDraw, "onDraw")
+addHook(OnValue, "onValue")
+applyHook()
