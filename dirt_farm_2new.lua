@@ -255,6 +255,7 @@ function tnjk1_3(x, y)
     return true
 end
 
+-- Pemasangan Item Presisi Murni
 function trh1_3(x, y, id)
     if not EnablePlace or not autoDF_running then return false end
     
@@ -480,8 +481,10 @@ function processAutoDropAndTrash()
             if not autoDF_running then return end
             local jmlTrash = inv(trashID)
             if jmlTrash >= MinTrashToDrop then
+                LogToConsole("`w[`0Auto Trash`w] Item (" .. trashID .. ") mencapai limit (" .. jmlTrash .. "/" .. MinTrashToDrop .. "). Meluncur ke Trash World: " .. TrashWorld)
                 warp(TrashWorld, TrashDoor)
                 Sleep(6000)
+                waitForTilesToLoad()
                 walkTo(pos.x, pos.y, 2000)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. trashID)
@@ -490,6 +493,7 @@ function processAutoDropAndTrash()
                 Sleep(2000)
                 warpDFWorld(currentWorld)
                 Sleep(6000)
+                waitForTilesToLoad()
             end
         end
     end
@@ -500,8 +504,10 @@ function processAutoDropAndTrash()
             if not autoDF_running then return end
             local jml = inv(id)
             if jml >= MinToDrop then
+                LogToConsole("`w[`0Auto Drop`w] Item (" .. id .. ") mencapai limit (" .. jml .. "/" .. MinToDrop .. "). Meluncur ke Save World: " .. DropWorld)
                 warp(DropWorld, DropDoor)
                 Sleep(6000)
+                waitForTilesToLoad()
                 walkTo(pos.x, pos.y, 2000)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. id)
@@ -510,16 +516,19 @@ function processAutoDropAndTrash()
                 Sleep(2000)
                 warpDFWorld(currentWorld)
                 Sleep(6000)
+                waitForTilesToLoad()
             end
         end
     end
 end
 
+-- FIX: Auto Drop/Trash Dipanggil Setiap Kali Nyedot Barang!
 function processAutoPick()
-    if not AutoPickEnabled or not autoDF_running then return end
-    if AutoFind_Enabled then
+    if not autoDF_running then return end
+    if AutoPickEnabled and AutoFind_Enabled then
         sdt_11(10)
     end
+    processAutoDropAndTrash()
 end
 
 function findEmptyTile(radius)
@@ -645,10 +654,11 @@ function ambilSeed(id, jumlah)
     end
 end
 
+-- FIX: Berdiri di Y=22 (Luar Ubin Tanam)
 function plntDf_122()
     if not autoDF_running then return end
     LogToConsole("`w[`0Auto DF`w] Kehabisan Dirt Block! Menanam & memanen Dirt Seed mandiri...")
-    walkTo(2, 23, 2000)
+    walkTo(2, 22, 2000)
     Sleep(500)
 
     while autoDF_running do
@@ -662,17 +672,18 @@ function plntDf_122()
             local tile = safeTile(tilex, 23)
 
             if tile.fg == 3 and tile.readyharvest then
-                walkTo(tilex, 23, 1500)
+                walkTo(tilex, 22, 1500)
                 Sleep(200)
                 while safeTile(tilex, 23).fg == 3 and safeTile(tilex, 23).readyharvest and autoDF_running do
                     tnjk1_3(tilex, 23)
                     Sleep(dbk)
                 end
                 sdt_11(3)
+                processAutoDropAndTrash()
             end
 
             if tile.fg == 0 and inv(3) > 0 then
-                walkTo(tilex, 23, 1500)
+                walkTo(tilex, 22, 1500)
                 Sleep(200)
                 while safeTile(tilex, 23).fg == 0 and inv(3) > 0 and autoDF_running do
                     trh1_3(tilex, 23, 3)
@@ -755,7 +766,6 @@ end
 function plfS_15()
     if not autoDF_running or not PickPlat_Enabled then return end
 
-    -- 1. Restock Platform jika kurang dari 52
     if inv(PlatformID) < 52 then
         if StoragePlatWorld == "" then
             LogToConsole("`4[`0Plat Error`4] Nama World Storage Platform belum diisi!")
@@ -804,7 +814,6 @@ function plfS_15()
         Sleep(1000)
     end
 
-    -- 2. Proteksi Stok Kosong
     local currentPlatCount = inv(PlatformID)
     LogToConsole("`w[`0Auto DF`w] Stok Platform di backpack: `e" .. currentPlatCount)
     if currentPlatCount == 0 then
@@ -812,7 +821,6 @@ function plfS_15()
         return
     end
 
-    -- 3. Pasang Platform Kiri (Target X=1, Karakter Berdiri di X=0)
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if inv(PlatformID) == 0 then break end
@@ -829,7 +837,6 @@ function plfS_15()
         end
     end
 
-    -- 4. Pasang Platform Kanan (Target X=98, Karakter Berdiri di X=99)
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
         if inv(PlatformID) == 0 then break end
@@ -852,18 +859,13 @@ function plfS_15()
     if currentWorld ~= "" then
         warpDFWorld(currentWorld)
         Sleep(6000)
-    else
-        sendPacket(2, "action|respawn")
-        Sleep(4000)
     end
 end
 
--- FIXED: Pemukulan Presisi 3 Hitbox (Atas: -2, Tengah: 0, Bawah: +2) dengan Step 2
 function clrd_down_15()
     for tiley = 27, 51, 12 do
         if not autoDF_running then return end
 
-        -- Sapuan Kiri ke Kanan (X=2 s.d. X=97)
         for tilex = 2, 97, 1 do
             if not autoDF_running then return end
             
@@ -879,7 +881,6 @@ function clrd_down_15()
             if needBreak then
                 walkTo(tilex - 1, tiley, 1500)
                 Sleep(150)
-                -- Pemukulan Presisi 3 Hitbox (Step 2)
                 for i = -2, 2, 2 do
                     local timeout = 0
                     while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg == 14) 
@@ -896,7 +897,6 @@ function clrd_down_15()
             end
         end
 
-        -- Sapuan Kanan ke Kiri (X=97 balik ke X=2)
         if (tiley + 6) <= 53 then
             for tilex = 97, 2, -1 do
                 if not autoDF_running then return end
@@ -913,7 +913,6 @@ function clrd_down_15()
                 if needBreak then
                     walkTo(tilex + 1, tiley + 6, 1500)
                     Sleep(150)
-                    -- Pemukulan Presisi 3 Hitbox (Step 2)
                     for i = 4, 8, 2 do
                         local timeout = 0
                         while (safeTile(tilex, tiley + i).fg ~= 0 or safeTile(tilex, tiley + i).bg == 14) 
@@ -982,6 +981,7 @@ function plcDrt_2()
                     end
                 end
             end
+            processAutoPick()
         end
     end
 end
@@ -1006,6 +1006,7 @@ function fillEmptyCaveTiles()
                 Sleep(dpc)
                 timeout = timeout + 1
             end
+            processAutoPick()
         end
     end
 end
@@ -1029,6 +1030,7 @@ function clearLeftoverSafe()
                     Sleep(dbk)
                 end
                 sdt_11(3)
+                processAutoDropAndTrash()
             end
 
             for _, obj in pairs(safeGetObjectList()) do
@@ -1038,6 +1040,7 @@ function clearLeftoverSafe()
                     if ox == tilex and oy == tiley then
                         sdtr_11(obj)
                         Sleep(150)
+                        processAutoDropAndTrash()
                     end
                 end
             end
@@ -1090,6 +1093,7 @@ function StopAll()
     LogToConsole("`w[`0Auto DF`w]`4 STOP DITEKAN! Pergerakan & pengerjaan dihentikan.")
 end
 
+-- FIX TOTAL: RESPAWN PAKSA DIHAPUS TOTAL SUPAYA TIDAK NGESTUCK DI MAIN DOOR!
 function mainDF()
     if not autoDF_running then return end
     if not nameworld or nameworld == "" then return end
@@ -1136,9 +1140,6 @@ function mainDF()
     plcDrt_2()
     if not autoDF_running then return end
 
-    sendPacket(2, "action|respawn")
-    Sleep(3000)
-
     fillEmptyCaveTiles()
     if not autoDF_running then return end
 
@@ -1147,9 +1148,6 @@ function mainDF()
 
     writeToLocal("finished_df.txt", os.date("[%Y-%m-%d %H:%M] ") .. nameworld .. "\n")
     LogToConsole("`w[`2SUCCESS`w] World " .. nameworld .. " selesai & dicatat ke finished_df.txt!")
-
-    sendPacket(2, "action|respawn")
-    Sleep(3000)
 end
 
 function LoopMultiWorld()
@@ -1291,7 +1289,7 @@ local module_json = [[
                 {
                     "type": "input_string",
                     "text": "List World",
-                    "default": "CONCG,MLJEG,JVHXP,IIGNV,YCRRU,JSVMB,BIPKC",
+                    "default": "TKTYW,QVSVF,FCMQW,DEJCA,ACMFA,FZSGR,KWYRY,DWTWG,JZUXA,TUIGE,JTLQM,IMCKM,DQKQU,FUQRB,WZWGW",
                     "icon": "Edit",
                     "alias": "autodf_worldlist"
                 },
@@ -1602,7 +1600,7 @@ local module_json = [[
                 {
                     "type": "input_int",
                     "text": "Plat Item ID",
-                    "default": "102",
+                    "default": "1324",
                     "label": "ID",
                     "placeholder": "Item ID",
                     "icon": "Verified",
@@ -1686,7 +1684,7 @@ function onValue(type_evt, name, value)
     elseif name == "pick_plat_toggle" then PickPlat_Enabled = value
     elseif name == "pick_plat_world" then StoragePlatWorld = tostring(value)
     elseif name == "pick_plat_doorid" then StoragePlatDoor = tostring(value)
-    elseif name == "pick_plat_id" then PlatformID = math.floor(tonumber(value) or 102)
+    elseif name == "pick_plat_id" then PlatformID = math.floor(tonumber(value) or 1324)
     
     elseif name == "btn_itemfinder" then openItemFinderDialog()
     
@@ -1709,7 +1707,7 @@ end
 addHook(onSendPacket, "onSendPacket")
 applyHook()
 
-sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master 3-Hitbox Fix `wCreated By `9Freazd"})
+sendVariant({v1 = "OnTextOverlay", v2 = "`9Script DF Master Fully Patched `wCreated By `9Freazd"})
 
 runCoroutine(function()
     while true do
