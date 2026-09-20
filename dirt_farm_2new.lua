@@ -36,23 +36,24 @@ VerifyPunch = false
 
 DFWorldDoor = "IWP2145"
 
--- LOGIKA AUTO DROP & COOLDOWN ANTI SHADOWBAN
+-- LOGIKA AUTO DROP & COOLDOWN ANTI SHADOWBAN (IDEAL 20 DETIK)
 AutoDropEnabled = true
 lastDropTime = 0
-DropCooldown = 15 -- Cooldown minimal 15 detik dari SETELAH mendarat balik di World DF
+DropCooldown = 20 -- Cooldown ideal 20 detik (Paling Aman & Pas)
 
 DropWorld = "PLATSAVEHAM"
 DropDoor = "12345"
 
+-- TERTAMBAH KOORDINAT TERBARU (X = 98)
 ItemSlots = {
-    { id = 3,  min = 190, x = 55, y = 21 }, -- Seed Dirt
-    { id = 2,  min = 190, x = 55, y = 18 }, -- Dirt Block
-    { id = 15, min = 190, x = 47, y = 21 }, -- Seed Cave
-    { id = 14, min = 50,  x = 47, y = 18 }, -- Cave Block
-    { id = 11, min = 190, x = 47, y = 15 }, -- Seed Rock
-    { id = 10, min = 50,  x = 47, y = 12 }, -- Rock Block
-    { id = 5,  min = 190, x = 55, y = 15 }, -- Seed Lava
-    { id = 4,  min = 50,  x = 55, y = 12 }  -- Lava Block
+    { id = 3,  min = 190, x = 98, y = 22 }, -- Seed Dirt
+    { id = 2,  min = 190, x = 98, y = 23 }, -- Dirt Block
+    { id = 15, min = 190, x = 98, y = 21 }, -- Seed Cave
+    { id = 14, min = 50,  x = 98, y = 20 }, -- Cave Block
+    { id = 11, min = 190, x = 98, y = 19 }, -- Seed Rock
+    { id = 10, min = 50,  x = 98, y = 18 }, -- Rock Block
+    { id = 5,  min = 190, x = 98, y = 17 }, -- Seed Lava
+    { id = 4,  min = 50,  x = 98, y = 16 }  -- Lava Block
 }
 
 botStartTime = os.time()
@@ -531,11 +532,10 @@ function setupNewRandomWorld()
     return true
 end
 
--- LOGIKA AUTO DROP DENGAN AKURASI PERHITUNGAN COOLDOWN FIXED
+-- LOGIKA AUTO DROP DENGAN FITUR GESER KOORDINAT DYNAMIC (X - 1) & HUMAN RECOVERY DELAY
 function processAutoDropAndTrash()
     if not autoDF_running or not AutoDropEnabled then return end
 
-    -- Pengecekan Cooldown (Diukur dari WAKTU KEMBALI di World DF)
     local currentTime = os.time()
     if (currentTime - lastDropTime) < DropCooldown then
         return
@@ -551,33 +551,60 @@ function processAutoDropAndTrash()
             local jml = inv(slot.id)
             if jml >= slot.min and DropWorld ~= "" then
                 
-                -- Khusus Dirt Block (ID 2), sisakan 50 di backpack untuk nambal
                 local dropAmount = jml
                 if slot.id == 2 then
                     dropAmount = jml - 50
                 end
 
                 if dropAmount > 0 then
-                    LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Dropping " .. dropAmount .. " ke World: " .. DropWorld)
+                    LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Pindah ke Storage: " .. DropWorld)
                     
                     warp(DropWorld, DropDoor)
                     Sleep(7000)
                     waitForTilesToLoad()
                     
-                    walkTo(slot.x, slot.y, 2000)
-                    Sleep(1000)
-                    
-                    sendPacket(2, "action|drop\nitemID|" .. slot.id)
-                    Sleep(600)
-                    sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. slot.id .. "|\ncount|" .. dropAmount)
-                    Sleep(2000)
-                    
+                    local targetX = slot.x
+                    local targetY = slot.y
+                    local dropSuccess = false
+                    local attempts = 0
+
+                    -- LOOPING PENCARIAN UBIN KOSONG KETIKA PENUH
+                    while autoDF_running and not dropSuccess and attempts < 10 and targetX >= 1 do
+                        walkTo(targetX, targetY, 2000)
+                        Sleep(800)
+
+                        local countBefore = inv(slot.id)
+
+                        sendPacket(2, "action|drop\nitemID|" .. slot.id)
+                        Sleep(600)
+                        sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. slot.id .. "|\ncount|" .. dropAmount)
+                        Sleep(1500)
+
+                        local countAfter = inv(slot.id)
+
+                        -- VERIFIKASI: Jika stok backpack berkurang, berarti DROP BERHASIL!
+                        if countAfter < countBefore then
+                            dropSuccess = true
+                            slot.x = targetX -- AUTO-SAVE KOORDINAT BARU YANG BERHASIL
+                            LogToConsole("`w[`2Auto Drop Success`w] Berhasil drop di X=" .. targetX .. " Y=" .. targetY)
+                        else
+                            -- Jika stok TIDAK berkurang (Drop Penuh), beri jeda recovery humanis lalu geser 1 ubin ke kiri
+                            LogToConsole("`4[`0Drop Full`4] X=" .. targetX .. " Y=" .. targetY .. " penuh/gagal! Menunggu jeda aman & geser ke X=" .. (targetX - 1))
+                            targetX = targetX - 1
+                            attempts = attempts + 1
+                            Sleep(1200) -- JEDA RECOVERY HUMANIS UNTUK CEGAH SHADOWBAN
+                        end
+                    end
+
+                    if not dropSuccess then
+                        LogToConsole("`4[`0Warning Drop`4] Jalur drop penuh sampai 10 ubin ke kiri!")
+                    end
+
                     warpDFWorld(currentWorld)
                     Sleep(7000)
                     waitForTilesToLoad()
                     Sleep(1000)
 
-                    -- FIX LOGIC BUG: Waktu dicatat KETIKA SUDAH MENDARAT LAGI DI WORLD DF
                     lastDropTime = os.time()
                 end
             end
@@ -745,6 +772,7 @@ function smpng_12()
                safeTile(col2, tiley).bg == 14 or safeTile(col2, tiley).fg ~= 0 then
                 
                 walkTo(standX, tiley - 1, 1500)
+                Sleep(150)
                 
                 local timeout = 0
                 while (safeTile(col1, tiley).fg ~= 0 or safeTile(col1, tiley).bg == 14) 
@@ -971,34 +999,50 @@ function brkLv_12()
     end
 end
 
+-- PENAMBALAN DIRT (HALUS & HUMANIS)
 function plcDrt_2()
     for tiley = 24, 2, -2 do
         if not autoDF_running then return end
         for tilex = 4, 99, 5 do
             if not autoDF_running then return end
-            walkTo(tilex, tiley + 1, 1500)
-            Sleep(300)
+            
+            local hasEmptyTile = false
             for i = 1, 5 do
                 local tx = (tilex - 3) + i
                 if tx >= 2 and tx <= 97 and safeTile(tx, tiley).fg == 0 then
-                    if inv(2) == 0 and autoDF_running then
-                        plntDf_122()
-                        Sleep(200)
-                        walkTo(tilex, tiley + 1, 2000)
-                        Sleep(300)
-                    end
-                    local retry = 0
-                    while safeTile(tx, tiley).fg == 0 and inv(2) > 0 and autoDF_running and retry < 5 do
-                        if not trh1_3(tx, tiley, 2) then
-                            walkTo(tilex, tiley + 1, 1000)
-                            Sleep(150)
-                        end
-                        Sleep(dpc)
-                        retry = retry + 1
-                    end
+                    hasEmptyTile = true
+                    break
                 end
             end
-            processAutoPick()
+
+            if hasEmptyTile then
+                walkTo(tilex, tiley + 1, 1500)
+                Sleep(250)
+
+                for i = 1, 5 do
+                    local tx = (tilex - 3) + i
+                    if tx >= 2 and tx <= 97 and safeTile(tx, tiley).fg == 0 then
+                        if inv(2) == 0 and autoDF_running then
+                            plntDf_122()
+                            Sleep(200)
+                            walkTo(tilex, tiley + 1, 2000)
+                            Sleep(300)
+                        end
+                        local retry = 0
+                        while safeTile(tx, tiley).fg == 0 and inv(2) > 0 and autoDF_running and retry < 5 do
+                            if not trh1_3(tx, tiley, 2) then
+                                walkTo(tilex, tiley + 1, 1000)
+                                Sleep(150)
+                            end
+                            Sleep(dpc)
+                            retry = retry + 1
+                        end
+                    end
+                end
+                processAutoPick()
+            end
+            
+            Sleep(100)
         end
     end
 end
@@ -1020,6 +1064,7 @@ function fillEmptyCaveTiles()
                 end
 
                 if reached then
+                    Sleep(150)
                     if inv(2) == 0 and autoDF_running then
                         plntDf_122()
                         Sleep(200)
@@ -1507,57 +1552,57 @@ local module_json = [[
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 1 (Seed Dirt) ---" },
                 { "type": "input_int", "text": "ID Item 1", "default": "3", "alias": "item1_id" },
                 { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item1_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "55", "alias": "item1_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "21", "alias": "item1_y" },
+                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item1_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "22", "alias": "item1_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 2 (Dirt Block) ---" },
                 { "type": "input_int", "text": "ID Item 2", "default": "2", "alias": "item2_id" },
                 { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item2_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "55", "alias": "item2_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "18", "alias": "item2_y" },
+                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item2_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "23", "alias": "item2_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 3 (Seed Cave) ---" },
                 { "type": "input_int", "text": "ID Item 3", "default": "15", "alias": "item3_id" },
                 { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item3_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "47", "alias": "item3_x" },
+                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item3_x" },
                 { "type": "input_int", "text": "Koordinat Y", "default": "21", "alias": "item3_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 4 (Cave Block) ---" },
                 { "type": "input_int", "text": "ID Item 4", "default": "14", "alias": "item4_id" },
                 { "type": "input_int", "text": "Minimal Drop", "default": "50", "alias": "item4_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "47", "alias": "item4_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "18", "alias": "item4_y" },
+                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item4_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "20", "alias": "item4_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 5 (Seed Rock) ---" },
                 { "type": "input_int", "text": "ID Item 5", "default": "11", "alias": "item5_id" },
                 { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item5_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "47", "alias": "item5_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "15", "alias": "item5_y" },
+                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item5_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "19", "alias": "item5_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 6 (Rock Block) ---" },
                 { "type": "input_int", "text": "ID Item 6", "default": "10", "alias": "item6_id" },
                 { "type": "input_int", "text": "Minimal Drop", "default": "50", "alias": "item6_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "47", "alias": "item6_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "12", "alias": "item6_y" },
+                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item6_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "18", "alias": "item6_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 7 (Seed Lava) ---" },
                 { "type": "input_int", "text": "ID Item 7", "default": "5", "alias": "item7_id" },
                 { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item7_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "55", "alias": "item7_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "15", "alias": "item7_y" },
+                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item7_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "17", "alias": "item7_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 8 (Lava Block) ---" },
                 { "type": "input_int", "text": "ID Item 8", "default": "4", "alias": "item8_id" },
                 { "type": "input_int", "text": "Minimal Drop", "default": "50", "alias": "item8_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "55", "alias": "item8_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "12", "alias": "item8_y" }
+                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item8_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "16", "alias": "item8_y" }
             ]
         },
         {
