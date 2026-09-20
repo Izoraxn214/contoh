@@ -36,8 +36,10 @@ VerifyPunch = false
 
 DFWorldDoor = "IWP2145"
 
--- LOGIKA AUTO DROP 8 SLOTS
+-- LOGIKA AUTO DROP & COOLDOWN ANTI SHADOWBAN (SWEET SPOT 15 DETIK)
 AutoDropEnabled = true
+lastDropTime = 0
+DropCooldown = 15 -- Cooldown ideal 15 detik antar Drop (Cepat & Anti Spam Warp)
 
 DropWorld = "PLATSAVEHAM"
 DropDoor = "12345"
@@ -167,6 +169,10 @@ end
 
 function warp(worldName, doorId)
     if not worldName or worldName == "" then return false end
+    
+    -- Jeda aman sebelum warp untuk menghindari shadowban
+    Sleep(1000)
+
     local target = worldName
     if doorId and doorId ~= "" then target = worldName .. "|" .. doorId end
     local ok, err = pcall(growtopia.warpTo, target)
@@ -410,7 +416,7 @@ function ensureSetupItems()
         end
 
         warp(targetStorageWorld, targetStorageDoor)
-        Sleep(6000)
+        Sleep(7000)
         waitForTilesToLoad()
         Sleep(1000)
 
@@ -448,7 +454,7 @@ function ensureSetupItems()
         end
 
         warpDFWorld(currentWorld)
-        Sleep(6000)
+        Sleep(7000)
         waitForTilesToLoad()
         Sleep(1000)
     end
@@ -526,9 +532,15 @@ function setupNewRandomWorld()
     return true
 end
 
--- LOGIKA AUTO DROP DENGAN PROTEKSI REVISI DIRT (SISAKAN 50 DIRT BLOCK)
+-- LOGIKA AUTO DROP DENGAN COOLDOWN ANTI SPAM WARP & SISAKAN 50 DIRT
 function processAutoDropAndTrash()
     if not autoDF_running or not AutoDropEnabled then return end
+
+    -- Pengecekan Cooldown (Minimal 15 detik antar proses drop)
+    local currentTime = os.time()
+    if (currentTime - lastDropTime) < DropCooldown then
+        return
+    end
 
     local currentWorld = safeGetWorldName()
     if currentWorld == "" then return end
@@ -547,19 +559,25 @@ function processAutoDropAndTrash()
                 end
 
                 if dropAmount > 0 then
+                    lastDropTime = os.time() -- Catat waktu drop terakhir
                     LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Dropping " .. dropAmount .. " ke World: " .. DropWorld)
+                    
                     warp(DropWorld, DropDoor)
-                    Sleep(6000)
+                    Sleep(7000)
                     waitForTilesToLoad()
+                    
                     walkTo(slot.x, slot.y, 2000)
                     Sleep(1000)
+                    
                     sendPacket(2, "action|drop\nitemID|" .. slot.id)
                     Sleep(600)
                     sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. slot.id .. "|\ncount|" .. dropAmount)
                     Sleep(2000)
+                    
                     warpDFWorld(currentWorld)
-                    Sleep(6000)
+                    Sleep(7000)
                     waitForTilesToLoad()
+                    Sleep(1000)
                 end
             end
         end
@@ -587,7 +605,7 @@ function ambilSeed(id, jumlah)
         
         local initialAmount = inv(id)
         warp(worldsaveseed, worldsaveseedDoor)
-        Sleep(6000)
+        Sleep(7000)
         waitForTilesToLoad()
         Sleep(1000)
 
@@ -626,7 +644,7 @@ function ambilSeed(id, jumlah)
         end
 
         warpDFWorld(nameworld)
-        Sleep(6000)
+        Sleep(7000)
         waitForTilesToLoad()
         Sleep(1000)
 
@@ -772,7 +790,7 @@ function plfS_15()
 
         LogToConsole("`w[`0Auto DF`w] Platform kurang (" .. inv(PlatformID) .. "/52). Ambil ke Storage: " .. StoragePlatWorld)
         warp(StoragePlatWorld, StoragePlatDoor)
-        Sleep(6000)
+        Sleep(7000)
         waitForTilesToLoad()
         Sleep(1500)
         
@@ -810,7 +828,7 @@ function plfS_15()
         end
         
         warpDFWorld(nameworld)
-        Sleep(6000)
+        Sleep(7000)
         waitForTilesToLoad()
         Sleep(1000)
     end
@@ -859,7 +877,7 @@ function plfS_15()
     local currentWorld = safeGetWorldName()
     if currentWorld ~= "" then
         warpDFWorld(currentWorld)
-        Sleep(6000)
+        Sleep(7000)
     end
 end
 
@@ -1168,7 +1186,7 @@ function mainDF()
     worldStartTime = os.time()
 
     warpDFWorld(nameworld)
-    Sleep(6000)
+    Sleep(7000)
     LogToConsole("`w[`0Auto DF`w] Masuk world: " .. tostring(nameworld))
     Sleep(1000)
 
