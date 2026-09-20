@@ -44,13 +44,13 @@ DropDoor = "12345"
 
 ItemSlots = {
     { id = 3,  min = 190, x = 55, y = 21 }, -- Seed Dirt
-    { id = 2,  min = 190, x = 55, y = 18 }, -- Dirt
+    { id = 2,  min = 190, x = 55, y = 18 }, -- Dirt Block
     { id = 15, min = 190, x = 47, y = 21 }, -- Seed Cave
-    { id = 14, min = 50,  x = 47, y = 18 }, -- Cave
+    { id = 14, min = 50,  x = 47, y = 18 }, -- Cave Block
     { id = 11, min = 190, x = 47, y = 15 }, -- Seed Rock
-    { id = 10, min = 50,  x = 47, y = 12 }, -- Rock
+    { id = 10, min = 50,  x = 47, y = 12 }, -- Rock Block
     { id = 5,  min = 190, x = 55, y = 15 }, -- Seed Lava
-    { id = 4,  min = 50,  x = 55, y = 12 }  -- Lava
+    { id = 4,  min = 50,  x = 55, y = 12 }  -- Lava Block
 }
 
 botStartTime = os.time()
@@ -75,14 +75,38 @@ RandWithNumber = false
 
 math.randomseed(os.time())
 
--- PROTEKSI UBIN UNBREAKABLE (SINKRON MGUI DENGAN VARIABLE DINAMIS)
+-- PROTEKSI UBIN UNBREAKABLE + PLATFORM MGUI + ITEM FARMABLE
 local function isUnbreakable(fg)
     local id = tonumber(fg) or 0
+    if id == 0 then return false end
+
     local dynamicDoorID = tonumber(PickDoor_ID) or 5036
     local dynamicWLID = tonumber(PickWL_ID) or 242
-    return id == 8 or id == 6 or id == dynamicWLID or id == 202 or id == 204 or id == 206 
+    local dynamicPlatID = tonumber(PlatformID) or 1324
+
+    -- 1. Proteksi Unbreakable Standar, Door, WL, dan Platform dari mGUI
+    if id == 8 or id == 6 or id == dynamicWLID or id == 202 or id == 204 or id == 206 
         or id == 2408 or id == 4994 or id == 1790 
         or id == dynamicDoorID or id == tonumber(EntranceID)
+        or id == dynamicPlatID then
+        return true
+    end
+
+    -- 2. Daftar Blok DF Standar (Hanya 5 blok ini yang boleh dihancurkan)
+    local clearableDFBlocks = {
+        [2]  = true, -- Dirt Block
+        [3]  = true, -- Dirt Tree
+        [4]  = true, -- Lava Block
+        [10] = true, -- Rock Block
+        [14] = true  -- Cave Dirt
+    }
+
+    -- Semua item/seed/farmable lain otomatis diproteksi!
+    if not clearableDFBlocks[id] then
+        return true
+    end
+
+    return false
 end
 
 local function generateRandomWorld(length, withNum)
@@ -343,9 +367,13 @@ function sdt_11(range)
 end
 
 function hasWorldLock()
+    local dynamicWLID = tonumber(PickWL_ID) or 242
     for _, tile in pairs(safeGetTiles()) do
-        if tile and (isUnbreakable(tile.fg) or isUnbreakable(tile.bg)) then
-            return true
+        if tile then
+            local id = tile.fg or 0
+            if id == dynamicWLID or id == 202 or id == 204 or id == 206 or id == 2408 or id == 4994 or id == 1790 then
+                return true
+            end
         end
     end
     return false
@@ -498,6 +526,7 @@ function setupNewRandomWorld()
     return true
 end
 
+-- LOGIKA AUTO DROP DENGAN PROTEKSI REVISI DIRT (SISAKAN 50 DIRT BLOCK)
 function processAutoDropAndTrash()
     if not autoDF_running or not AutoDropEnabled then return end
 
@@ -510,19 +539,28 @@ function processAutoDropAndTrash()
         if slot.id > 0 and slot.min > 0 then
             local jml = inv(slot.id)
             if jml >= slot.min and DropWorld ~= "" then
-                LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Meluncur ke World Drop: " .. DropWorld)
-                warp(DropWorld, DropDoor)
-                Sleep(6000)
-                waitForTilesToLoad()
-                walkTo(slot.x, slot.y, 2000)
-                Sleep(1000)
-                sendPacket(2, "action|drop\nitemID|" .. slot.id)
-                Sleep(600)
-                sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. slot.id .. "|\ncount|" .. jml)
-                Sleep(2000)
-                warpDFWorld(currentWorld)
-                Sleep(6000)
-                waitForTilesToLoad()
+                
+                -- Khusus Dirt Block (ID 2), sisakan 50 di backpack untuk nambal
+                local dropAmount = jml
+                if slot.id == 2 then
+                    dropAmount = jml - 50
+                end
+
+                if dropAmount > 0 then
+                    LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Dropping " .. dropAmount .. " ke World: " .. DropWorld)
+                    warp(DropWorld, DropDoor)
+                    Sleep(6000)
+                    waitForTilesToLoad()
+                    walkTo(slot.x, slot.y, 2000)
+                    Sleep(1000)
+                    sendPacket(2, "action|drop\nitemID|" .. slot.id)
+                    Sleep(600)
+                    sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. slot.id .. "|\ncount|" .. dropAmount)
+                    Sleep(2000)
+                    warpDFWorld(currentWorld)
+                    Sleep(6000)
+                    waitForTilesToLoad()
+                end
             end
         end
     end
@@ -545,7 +583,7 @@ function ambilSeed(id, jumlah)
     if not autoDF_running then return end
     if inv(id) < jumlah then
         if worldsaveseed == "" then return end
-        LogToConsole("`w[`0Setup`w] Restock Seed/Item (" .. id .. ") ke Save World: " .. worldsaveseed)
+        LogToConsole("`w[`0Setup`w] Restock Item ID (" .. id .. ") ke Save World: " .. worldsaveseed)
         
         local initialAmount = inv(id)
         warp(worldsaveseed, worldsaveseedDoor)
@@ -593,74 +631,89 @@ function ambilSeed(id, jumlah)
         Sleep(1000)
 
         if inv(id) <= initialAmount then
-            LogToConsole("`4[`0Warning`4] Stok item di Storage habis atau gagal dipungut! Melanjutkan...")
+            LogToConsole("`4[`0Warning`4] Stok Item ID (" .. id .. ") di Storage habis atau tidak ada!")
         end
     end
 end
 
--- DIRT TREE PLANTING (RENTANG X=2 s.d. 25 PADA Y=25)
+-- LOGIKA DINAMIS: AMBIL DIRT DARI STORAGE DULU, FALLBACK TANAM Y=25 JIKA HABIS
 function plntDf_122()
     if not autoDF_running then return end
     if inv(2) >= 30 then return end
 
-    LogToConsole("`w[`0Auto DF`w] Kehabisan Dirt Block! Menanam & memanen Dirt Seed di Y=25...")
-    walkTo(1, 25, 2000)
-    Sleep(500)
+    LogToConsole("`w[`0Auto DF`w] Dirt Block kurang (" .. inv(2) .. "/30). Mengambil langsung dari Storage: " .. worldsaveseed)
 
-    while autoDF_running do
-        for tilex = 2, 25 do
+    -- 1. UTAMA: Coba ambil Dirt Block (ID 2) langsung dari Storage
+    ambilSeed(2, 50)
+    
+    if inv(2) >= 30 then
+        LogToConsole("`w[`2Auto DF`w] Berhasil restock Dirt Block dari Storage! Stok sekarang: " .. inv(2))
+        return
+    end
+
+    -- 2. FALLBACK: Jika di Storage habis, baru tanam mandiri di Y=25
+    LogToConsole("`4[`0Warning`4] Dirt Block di Storage habis! Menanam batch Dirt Seed di Y=25 sebagai cadangan...")
+
+    while autoDF_running and inv(2) < 30 do
+        if inv(3) == 0 then
+            ambilSeed(3, 50)
             if not autoDF_running then return end
-            if inv(3) == 0 then
-                ambilSeed(3, 50)
-                Sleep(200)
-                walkTo(tilex - 1, 25, 1500)
-                Sleep(200)
-            end
+        end
 
-            local targetY = 25 -- POSISI POHON & SEED (Y=25)
-            local standX = tilex - 1
-            local standY = 25 -- PLAYER BERDIRI SEJAJAR (Y=25)
+        local plantedAny = false
+        for tilex = 2, 25 do
+            if not autoDF_running or inv(3) == 0 then break end
 
-            -- Pasang tumpuan tanah di Y=26 jika belum ada
             if safeTile(tilex, 26).fg == 0 then
                 trh1_3(tilex, 26, 2)
                 Sleep(dpc)
             end
 
-            local tile = safeTile(tilex, targetY)
+            -- Hanya tanam jika ubin benar-benar KOSONG (tidak menimpa Farmable)
+            if safeTile(tilex, 25).fg == 0 and inv(3) > 0 then
+                walkTo(tilex - 1, 25, 1000)
+                trh1_3(tilex, 25, 3)
+                Sleep(dpc)
+                plantedAny = true
+            end
+        end
 
-            -- Panen Pohon (Sejajar Y=25)
-            if tile.fg == 3 and tile.readyharvest then
-                walkTo(standX, standY, 1500)
-                Sleep(150)
-                while safeTile(tilex, targetY).fg == 3 and safeTile(tilex, targetY).readyharvest and autoDF_running do
-                    tnjk1_3(tilex, targetY)
+        if not plantedAny then
+            LogToConsole("`4[`0Warning`4] Lorong Y=25 terisi penuh Farmable! Melanjutkan penambalan dengan stok tersisa...")
+            break
+        end
+
+        -- Tunggu Pohon Tumbuh
+        local waitTime = 0
+        while autoDF_running and waitTime < 32 do
+            local readyCount = 0
+            for tilex = 2, 25 do
+                if safeTile(tilex, 25).readyharvest then
+                    readyCount = readyCount + 1
+                end
+            end
+            if readyCount >= 10 then break end
+
+            Sleep(1000)
+            waitTime = waitTime + 1
+        end
+
+        -- Panen Pohon
+        for tilex = 2, 25 do
+            if not autoDF_running then return end
+
+            if safeTile(tilex, 25).fg == 3 and safeTile(tilex, 25).readyharvest then
+                walkTo(tilex - 1, 25, 1000)
+                while safeTile(tilex, 25).fg == 3 and safeTile(tilex, 25).readyharvest and autoDF_running do
+                    tnjk1_3(tilex, 25)
                     Sleep(dbk)
                 end
                 sdt_11(1)
                 processAutoDropAndTrash()
             end
-
-            -- Tanam Seed (Sejajar Y=25)
-            if safeTile(tilex, targetY).fg == 0 and inv(3) > 0 then
-                walkTo(standX, standY, 1500)
-                Sleep(150)
-                while safeTile(tilex, targetY).fg == 0 and inv(3) > 0 and autoDF_running do
-                    trh1_3(tilex, targetY, 3)
-                    Sleep(dpc)
-                end
-            end
-
-            if inv(2) >= 30 then break end
         end
 
         if inv(2) >= 30 then break end
-        
-        local waitElapsed = 0
-        while autoDF_running and waitElapsed < 5000 do
-            Sleep(500)
-            waitElapsed = waitElapsed + 500
-        end
     end
 end
 
@@ -895,7 +948,6 @@ function brkLv_12()
             processAutoPick()
             if safeTile(tile.x, tile.y).fg == 0 and autoDF_running then
                 while inv(2) == 0 and autoDF_running do
-                    ambilSeed(3, 50)
                     plntDf_122()
                     Sleep(500)
                 end
@@ -917,7 +969,6 @@ function plcDrt_2()
                 local tx = (tilex - 3) + i
                 if tx >= 2 and tx <= 97 and safeTile(tx, tiley).fg == 0 then
                     if inv(2) == 0 and autoDF_running then
-                        ambilSeed(3, 50)
                         plntDf_122()
                         Sleep(200)
                         walkTo(tilex, tiley + 1, 2000)
@@ -957,7 +1008,6 @@ function fillEmptyCaveTiles()
 
                 if reached then
                     if inv(2) == 0 and autoDF_running then
-                        ambilSeed(3, 50)
                         plntDf_122()
                         Sleep(200)
                     end
@@ -975,28 +1025,38 @@ function fillEmptyCaveTiles()
     end
 end
 
+-- PANEN POHON DIRT TERTANAM (Y=2 s.d 25) & SISA ITEM
 function clearLeftoverSafe()
     if not autoDF_running then return end
-    LogToConsole("`w[`0Auto DF`w] Membersihkan sisa pohon & item tercecer...")
-    Sleep(1000)
+    LogToConsole("`w[`0Auto DF`w] Memanen sisa pohon dirt (Y=2 s.d 25) & membersihkan item...")
+    Sleep(500)
 
-    for tiley = 2, 24 do
+    for tiley = 2, 25 do
         if not autoDF_running then return end
         for tilex = 0, 99 do
             if not autoDF_running then return end
             local tile = safeTile(tilex, tiley)
 
-            if tile.fg == 3 and tile.readyharvest then
+            -- Memanen POHON DIRT (FG=3) saja
+            if tile.fg == 3 then
                 walkTo(tilex, tiley + 1, 1500)
                 Sleep(150)
-                while safeTile(tilex, tiley).fg == 3 and safeTile(tilex, tiley).readyharvest and autoDF_running do
+                local timeout = 0
+                while safeTile(tilex, tiley).fg == 3 and autoDF_running and timeout < 15 do
                     tnjk1_3(tilex, tiley)
                     Sleep(dbk)
+                    timeout = timeout + 1
                 end
                 sdt_11(1)
                 processAutoDropAndTrash()
+
+                if tiley <= 23 and tilex >= 2 and tilex <= 97 and safeTile(tilex, tiley).fg == 0 and inv(2) > 0 then
+                    trh1_3(tilex, tiley, 2)
+                    Sleep(dpc)
+                end
             end
 
+            -- Ambil item tercecer
             for _, obj in pairs(safeGetObjectList()) do
                 if obj then
                     local ox = math.floor(((obj.posX or 0) + 8) / 32)
@@ -1012,6 +1072,7 @@ function clearLeftoverSafe()
     end
 end
 
+-- AUDIT BAWAH SAMPAI ATAS (FULL WORLD)
 function isWorldAlreadyDone()
     if not waitForTilesToLoad() then
         LogToConsole("`4[`0Warning`4] Tile world belum ter-load sempurna! Memulai pengerjaan...")
@@ -1026,25 +1087,34 @@ function isWorldAlreadyDone()
 
     local unclearedCount = 0
     local emptySkyCount = 0
+    local leftoverTreeCount = 0
 
     for _, t in pairs(tiles) do
         if t and t.x and t.y then
+            -- 1. Gua Bawah (Y=24 s.d 53)
             if t.y >= 24 and t.y <= 53 and t.x >= 0 and t.x <= 99 then
                 if t.bg == 14 or (t.fg ~= 0 and not isUnbreakable(t.fg)) then 
                     unclearedCount = unclearedCount + 1
                 end
             end
+
+            -- 2. Langit Atas (Y=2 s.d 23) -> Wajib Dirt Block (FG=2) atau diproteksi
             if t.y >= 2 and t.y <= 23 and t.x >= 2 and t.x <= 97 then
-                if t.fg == 0 then
+                if t.fg ~= 2 and not isUnbreakable(t.fg) then
                     emptySkyCount = emptySkyCount + 1
                 end
+            end
+
+            -- 3. Cek Pohon Dirt Tertanam di Seluruh Area Farm (Y=2 s.d 25)
+            if t.y >= 2 and t.y <= 25 and t.fg == 3 then
+                leftoverTreeCount = leftoverTreeCount + 1
             end
         end
     end
 
-    LogToConsole("`w[`0Audit World`w] Gua Kotor: `e" .. unclearedCount .. "`w ubin | Langit Kosong: `e" .. emptySkyCount .. "`w ubin")
+    LogToConsole("`w[`0Audit World`w] Gua Kotor: `e" .. unclearedCount .. "`w | Langit Bukan Dirt: `e" .. emptySkyCount .. "`w | Pohon Dirt: `e" .. leftoverTreeCount)
 
-    if unclearedCount > 0 or emptySkyCount > 0 then
+    if unclearedCount > 0 or emptySkyCount > 0 or leftoverTreeCount > 0 then
         return false
     end
 
@@ -1055,7 +1125,7 @@ function verifyAndPatchWorld()
     if not autoDF_running then return true end
     LogToConsole("`w[`0Audit Akhir`w] Memeriksa ulang seluruh world sebelum pindah...")
     
-    local retryLimit = 3
+    local retryLimit = 1
     local currentRetry = 0
     
     while autoDF_running and currentRetry < retryLimit do
@@ -1065,15 +1135,15 @@ function verifyAndPatchWorld()
         end
         
         currentRetry = currentRetry + 1
-        LogToConsole("`4[`0Penambalan`4] Masih ada ubin bolong/kotor! Memulai perbaikan otomatis ke-" .. currentRetry .. "...")
+        LogToConsole("`4[`0Penambalan`4] Masih ada ubin bolong/pohon tertanam! Memulai perbaikan otomatis...")
         
+        clearLeftoverSafe()
+        if not autoDF_running then return false end
+
         plcDrt_2()
         if not autoDF_running then return false end
         
         fillEmptyCaveTiles()
-        if not autoDF_running then return false end
-        
-        clearLeftoverSafe()
         if not autoDF_running then return false end
         
         Sleep(1000)
@@ -1129,9 +1199,7 @@ function mainDF()
     brkLv_12()
     if not autoDF_running then return end
 
-    if inv(3) < 25 then
-        ambilSeed(3, 50)
-        if not autoDF_running then return end
+    if inv(2) < 30 then
         plntDf_122()
         if not autoDF_running then return end
     end
@@ -1149,7 +1217,7 @@ function mainDF()
         writeToLocal("finished_df.txt", os.date("[%Y-%m-%d %H:%M] ") .. nameworld .. "\n")
         LogToConsole("`w[`2SUCCESS`w] World " .. nameworld .. " selesai & dicatat ke finished_df.txt!")
     else
-        LogToConsole("`4[`0Warning`4] World " .. nameworld .. " masih ada bagian belum tertutup sempurna setelah 3x penambalan!")
+        LogToConsole("`4[`0Warning`4] World " .. nameworld .. " masih ada bagian belum tertutup sempurna setelah penambalan!")
     end
 end
 
