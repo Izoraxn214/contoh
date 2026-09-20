@@ -598,13 +598,13 @@ function ambilSeed(id, jumlah)
     end
 end
 
--- DIRT TREE PLANTING (PERBAIKAN TARGET Y=22 SEJAJAR PLAYER)
+-- DIRT TREE PLANTING (RENTANG X=2 s.d. 25 PADA Y=25)
 function plntDf_122()
     if not autoDF_running then return end
     if inv(2) >= 30 then return end
 
-    LogToConsole("`w[`0Auto DF`w] Kehabisan Dirt Block! Menanam & memanen Dirt Seed mandiri...")
-    walkTo(1, 22, 2000)
+    LogToConsole("`w[`0Auto DF`w] Kehabisan Dirt Block! Menanam & memanen Dirt Seed di Y=25...")
+    walkTo(1, 25, 2000)
     Sleep(500)
 
     while autoDF_running do
@@ -613,23 +613,23 @@ function plntDf_122()
             if inv(3) == 0 then
                 ambilSeed(3, 50)
                 Sleep(200)
-                walkTo(tilex - 1, 22, 1500)
+                walkTo(tilex - 1, 25, 1500)
                 Sleep(200)
             end
 
-            local targetY = 22 -- SEJAJAR HORIZONTAL DENGAN PLAYER (Y=22)
+            local targetY = 25 -- POSISI POHON & SEED (Y=25)
             local standX = tilex - 1
-            local standY = 22
+            local standY = 25 -- PLAYER BERDIRI SEJAJAR (Y=25)
 
-            -- Pasang tumpuan tanah di Y=23 jika kosong
-            if safeTile(tilex, 23).fg == 0 then
-                trh1_3(tilex, 23, 2)
+            -- Pasang tumpuan tanah di Y=26 jika belum ada
+            if safeTile(tilex, 26).fg == 0 then
+                trh1_3(tilex, 26, 2)
                 Sleep(dpc)
             end
 
             local tile = safeTile(tilex, targetY)
 
-            -- Panen Pohon (Sejajar Y=22)
+            -- Panen Pohon (Sejajar Y=25)
             if tile.fg == 3 and tile.readyharvest then
                 walkTo(standX, standY, 1500)
                 Sleep(150)
@@ -641,7 +641,7 @@ function plntDf_122()
                 processAutoDropAndTrash()
             end
 
-            -- Tanam Seed (Sejajar Y=22)
+            -- Tanam Seed (Sejajar Y=25)
             if safeTile(tilex, targetY).fg == 0 and inv(3) > 0 then
                 walkTo(standX, standY, 1500)
                 Sleep(150)
