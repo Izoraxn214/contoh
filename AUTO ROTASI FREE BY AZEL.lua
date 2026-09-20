@@ -587,10 +587,35 @@ local function mainLoop(my_id)
     math.randomseed(os.time())
 
     seed_id            = config.block_id + 1
-    config.farm_world  = (config.farm_world and config.farm_world ~= "") and config.farm_world or (safeGetWorldName() or "")
     reconnecting       = false
     action_count       = 0
     session_start_time = os.time()
+
+    -- PERBAIKAN: Auto-warp ke Farm World di awal Start jika player berada di world lain
+    local current_w = safeGetWorldName()
+    if config.farm_world and config.farm_world ~= "" then
+        if not current_w or string.upper(current_w) ~= string.upper(config.farm_world) then
+            Log("Mencoba warp awal ke Farm World: " .. config.farm_world)
+            local warp_target = config.farm_world
+            if config.farm_door and config.farm_door ~= "" then
+                warp_target = warp_target .. "|" .. config.farm_door
+            end
+            
+            growtopia.warpTo(warp_target)
+            
+            local elapsed = 0
+            while elapsed < 15000 do
+                if not isThreadActive(my_id) then return end
+                local w = safeGetWorldName()
+                if w and string.upper(w) == string.upper(config.farm_world) then break end
+                Sleep(1000)
+                elapsed = elapsed + 1000
+            end
+            rSleep(1500, 2500)
+        end
+    else
+        config.farm_world = current_w or ""
+    end
 
     Log("ROTASI MULAI!")
     sendWebhook("🚀 **BOT STARTED:** Auto Rotasi diaktifkan di world **" .. tostring(config.farm_world) .. "**")
