@@ -44,7 +44,7 @@ DropCooldown = 20 -- Cooldown ideal 20 detik (Paling Aman & Pas)
 DropWorld = "PLATSAVEHAM"
 DropDoor = "12345"
 
--- TERTAMBAH KOORDINAT TERBARU (X = 98)
+-- KOORDINAT TERBARU (X = 98)
 ItemSlots = {
     { id = 3,  min = 190, x = 98, y = 22 }, -- Seed Dirt
     { id = 2,  min = 190, x = 98, y = 23 }, -- Dirt Block
@@ -999,7 +999,7 @@ function brkLv_12()
     end
 end
 
--- PENAMBALAN DIRT (HALUS & HUMANIS)
+-- PENAMBALAN DIRT (HALUS, SMART-PATH, & ANTI-FREEZE)
 function plcDrt_2()
     for tiley = 24, 2, -2 do
         if not autoDF_running then return end
@@ -1016,33 +1016,42 @@ function plcDrt_2()
             end
 
             if hasEmptyTile then
-                walkTo(tilex, tiley + 1, 1500)
-                Sleep(250)
+                -- Restock Dirt dulu jika kosong sebelum jalan jauh
+                if inv(2) == 0 and autoDF_running then
+                    plntDf_122()
+                    Sleep(300)
+                end
 
-                for i = 1, 5 do
-                    local tx = (tilex - 3) + i
-                    if tx >= 2 and tx <= 97 and safeTile(tx, tiley).fg == 0 then
-                        if inv(2) == 0 and autoDF_running then
-                            plntDf_122()
-                            Sleep(200)
-                            walkTo(tilex, tiley + 1, 2000)
-                            Sleep(300)
-                        end
-                        local retry = 0
-                        while safeTile(tx, tiley).fg == 0 and inv(2) > 0 and autoDF_running and retry < 5 do
-                            if not trh1_3(tx, tiley, 2) then
-                                walkTo(tilex, tiley + 1, 1000)
-                                Sleep(150)
+                local standY = tiley + 1
+                -- Hancurkan penghalang di titik berdiri jika ada
+                if safeTile(tilex, standY).fg ~= 0 and not isUnbreakable(safeTile(tilex, standY).fg) then
+                    tnjk1_3(tilex, standY)
+                    Sleep(dbk)
+                end
+
+                local reached = walkTo(tilex, standY, 1500)
+                if reached then
+                    Sleep(150)
+                    for i = 1, 5 do
+                        local tx = (tilex - 3) + i
+                        if tx >= 2 and tx <= 97 and safeTile(tx, tiley).fg == 0 then
+                            if inv(2) == 0 and autoDF_running then
+                                plntDf_122()
+                                Sleep(300)
+                                walkTo(tilex, standY, 1500)
                             end
-                            Sleep(dpc)
-                            retry = retry + 1
+                            local retry = 0
+                            while safeTile(tx, tiley).fg == 0 and inv(2) > 0 and autoDF_running and retry < 3 do
+                                trh1_3(tx, tiley, 2)
+                                Sleep(dpc)
+                                retry = retry + 1
+                            end
                         end
                     end
+                    processAutoPick()
                 end
-                processAutoPick()
             end
-            
-            Sleep(100)
+            Sleep(50)
         end
     end
 end
@@ -1058,20 +1067,20 @@ function fillEmptyCaveTiles()
             local tile = safeTile(tilex, tiley)
 
             if tile and tile.bg == 14 and tile.fg == 0 then
+                if inv(2) == 0 and autoDF_running then
+                    plntDf_122()
+                    Sleep(300)
+                end
+
                 local reached = walkTo(tilex, tiley - 1, 1000)
                 if not reached then
                     reached = walkTo(tilex - 1, tiley, 1000) or walkTo(tilex + 1, tiley, 1000)
                 end
 
                 if reached then
-                    Sleep(150)
-                    if inv(2) == 0 and autoDF_running then
-                        plntDf_122()
-                        Sleep(200)
-                    end
-
+                    Sleep(100)
                     local timeout = 0
-                    while safeTile(tilex, tiley).fg == 0 and inv(2) > 0 and autoDF_running and timeout < 5 do
+                    while safeTile(tilex, tiley).fg == 0 and inv(2) > 0 and autoDF_running and timeout < 3 do
                         trh1_3(tilex, tiley, 2)
                         Sleep(dpc)
                         timeout = timeout + 1
