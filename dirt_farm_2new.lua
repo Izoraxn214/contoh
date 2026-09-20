@@ -258,6 +258,7 @@ function inv(itemID)
     return 0
 end
 
+-- SMART WALKTO DENGAN AUTO-TUNNELING
 function walkTo(targetX, targetY, maxWaitMs)
     targetX = math.max(0, math.min(99, targetX))
     targetY = math.max(0, math.min(53, targetY))
@@ -272,24 +273,49 @@ function walkTo(targetX, targetY, maxWaitMs)
         return true
     end
 
-    local dist = math.abs(curX - targetX) + math.abs(curY - targetY)
-    maxWaitMs = maxWaitMs or math.min(2000, math.max(1000, dist * 200))
-
     FindPath(targetX, targetY)
 
     local elapsed = 0
+    maxWaitMs = maxWaitMs or 1500
     while autoDF_running and elapsed < maxWaitMs do
-        Sleep(150)
-        elapsed = elapsed + 150
+        Sleep(100)
+        elapsed = elapsed + 100
         local pl = getLocal()
         if pl and pl.posX and pl.posY then
-            local pxTile = pl.posX // 32
-            local pyTile = pl.posY // 32
-            if pxTile == targetX and pyTile == targetY then
-                Sleep(150)
+            if (pl.posX // 32) == targetX and (pl.posY // 32) == targetY then
                 return true
             end
         end
+    end
+
+    p = getLocal()
+    if not p or not p.posX or not p.posY then return false end
+    curX = p.posX // 32
+    curY = p.posY // 32
+
+    local stepX = curX
+    if curX < targetX then stepX = curX + 1
+    elseif curX > targetX then stepX = curX - 1 end
+
+    local stepY = curY
+    if curY < targetY then stepY = curY + 1
+    elseif curY > targetY then stepY = curY - 1 end
+
+    if safeTile(stepX, stepY).fg ~= 0 and not isUnbreakable(safeTile(stepX, stepY).fg) then
+        tnjk1_3(stepX, stepY)
+        Sleep(dbk)
+    end
+    if safeTile(stepX, curY).fg ~= 0 and not isUnbreakable(safeTile(stepX, curY).fg) then
+        tnjk1_3(stepX, curY)
+        Sleep(dbk)
+    end
+
+    FindPath(targetX, targetY)
+    Sleep(200)
+
+    p = getLocal()
+    if p and p.posX and p.posY then
+        return (p.posX // 32 == targetX and p.posY // 32 == targetY)
     end
     return false
 end
@@ -417,7 +443,6 @@ function findMainDoor()
     return 50, 29
 end
 
--- RESTOCK SETUP ITEMS (JALAN DULU BARU SEDOT RANGE 1 TILE)
 function ensureSetupItems()
     if not autoDF_running then return end
 
@@ -461,7 +486,7 @@ function ensureSetupItems()
                         Sleep(400)
                         
                         sdtr_11(object)
-                        sdt_11(1) -- RANGE 1 TILE SETELAH ARRIVED
+                        sdt_11(1)
                         Sleep(500)
                         
                         if inv(WorldLockID) > 0 and inv(EntranceID) >= 2 then break end
@@ -587,7 +612,6 @@ function processAutoDropAndTrash()
     end
 end
 
--- PROCESS AUTO PICK UTAMA (RANGE 5 UBIN DI WORLD KERJA)
 function processAutoPick()
     if not autoDF_running then return end
     if AutoPickEnabled then
@@ -601,7 +625,6 @@ function cekSeed()
     processAutoDropAndTrash()
 end
 
--- RESTOCK SEED (JALAN DULU BARU SEDOT RANGE 1 TILE)
 function ambilSeed(id, jumlah)
     if not autoDF_running then return end
     if inv(id) < jumlah then
@@ -630,7 +653,7 @@ function ambilSeed(id, jumlah)
                         Sleep(400)
                         
                         sdtr_11(object)
-                        sdt_11(1) -- RANGE 1 TILE SETELAH ARRIVED
+                        sdt_11(1)
                         Sleep(500)
                         
                         if inv(id) >= jumlah then break end
@@ -660,7 +683,6 @@ function ambilSeed(id, jumlah)
     end
 end
 
--- DIRT TREE PLANTING
 function plntDf_122()
     if not autoDF_running then return end
     if inv(2) >= 30 then return end
@@ -718,6 +740,7 @@ function plntDf_122()
     end
 end
 
+-- PEMBERSIHAN PINGGIRAN (FORCE MOVE & BREAK)
 function smpng_12()
     local p = getLocal()
     if p and p.posX and p.posY then
@@ -732,45 +755,28 @@ function smpng_12()
             if safeTile(col1, tiley).bg == 14 or safeTile(col1, tiley).fg ~= 0 or
                safeTile(col2, tiley).bg == 14 or safeTile(col2, tiley).fg ~= 0 then
                 
-                local reached = walkTo(standX, tiley - 1, 1500)
+                walkTo(standX, tiley - 1, 1500)
                 
-                if not reached then
-                    local curP = getLocal()
-                    if curP and curP.posX and curP.posY then
-                        local curX = curP.posX // 32
-                        local curY = curP.posY // 32
-                        local stepX = (standX > curX) and (curX + 1) or (curX - 1)
-                        if safeTile(stepX, curY).fg ~= 0 and not isUnbreakable(safeTile(stepX, curY).fg) then
-                            tnjk1_3(stepX, curY)
-                            Sleep(dbk)
-                        end
-                    end
-                    reached = walkTo(standX, tiley - 1, 1500)
+                local timeout = 0
+                while (safeTile(col1, tiley).fg ~= 0 or safeTile(col1, tiley).bg == 14) 
+                      and not isUnbreakable(safeTile(col1, tiley).fg) 
+                      and autoDF_running and timeout < 20 do
+                    if not tnjk1_3(col1, tiley) then Sleep(100) end
+                    Sleep(dbk)
+                    timeout = timeout + 1
                 end
 
-                if reached then
-                    Sleep(100)
-                    local timeout = 0
-                    while (safeTile(col1, tiley).fg ~= 0 or safeTile(col1, tiley).bg == 14) 
-                          and not isUnbreakable(safeTile(col1, tiley).fg) 
-                          and autoDF_running and timeout < 20 do
-                        if not tnjk1_3(col1, tiley) then Sleep(100) end
-                        Sleep(dbk)
-                        timeout = timeout + 1
-                    end
-
-                    timeout = 0
-                    while (safeTile(col2, tiley).fg ~= 0 or safeTile(col2, tiley).bg == 14) 
-                          and not isUnbreakable(safeTile(col2, tiley).fg) 
-                          and autoDF_running and timeout < 20 do
-                        if not tnjk1_3(col2, tiley) then Sleep(100) end
-                        Sleep(dbk)
-                        timeout = timeout + 1
-                    end
-
-                    processAutoPick()
-                    cekSeed()
+                timeout = 0
+                while (safeTile(col2, tiley).fg ~= 0 or safeTile(col2, tiley).bg == 14) 
+                      and not isUnbreakable(safeTile(col2, tiley).fg) 
+                      and autoDF_running and timeout < 20 do
+                    if not tnjk1_3(col2, tiley) then Sleep(100) end
+                    Sleep(dbk)
+                    timeout = timeout + 1
                 end
+
+                processAutoPick()
+                cekSeed()
             end
         end
     end
@@ -779,7 +785,6 @@ function smpng_12()
     clearSideColumns(98, 99, 99)
 end
 
--- RESTOCK PLATFORM (JALAN DULU BARU SEDOT RANGE 1 TILE)
 function plfS_15()
     if not autoDF_running or not PickPlat_Enabled then return end
 
@@ -812,7 +817,7 @@ function plfS_15()
                         Sleep(400)
                         
                         sdtr_11(object)
-                        sdt_11(1) -- RANGE 1 TILE SETELAH ARRIVED
+                        sdt_11(1)
                         Sleep(500)
                         
                         if inv(PlatformID) >= 52 then break end
@@ -1085,36 +1090,38 @@ function clearLeftoverSafe()
     end
 end
 
+-- AUDIT CEK TOTAL (FAST SINGLE-PASS)
 function isWorldAlreadyDone()
     if not waitForTilesToLoad() then
-        LogToConsole("`4[`0Warning`4] Data tile world gagal ter-load sempurna! Melanjutkan pemindaian...")
+        LogToConsole("`4[`0Warning`4] Tile world belum ter-load sempurna! Memulai pengerjaan...")
+        return false
+    end
+
+    local tiles = safeGetTiles()
+    if #tiles < 1000 then
+        LogToConsole("`4[`0Warning`4] Tile terdeteksi < 1000! Memulai pengerjaan...")
         return false
     end
 
     local unclearedCount = 0
     local emptySkyCount = 0
 
-    for tiley = 24, 53 do
-        for tilex = 0, 99 do
-            local t = safeTile(tilex, tiley)
-            if t.bg == 14 or (t.fg ~= 0 and not isUnbreakable(t.fg)) then 
-                unclearedCount = unclearedCount + 1
+    for _, t in pairs(tiles) do
+        if t and t.x and t.y then
+            if t.y >= 24 and t.y <= 53 and t.x >= 0 and t.x <= 99 then
+                if t.bg == 14 or (t.fg ~= 0 and not isUnbreakable(t.fg)) then 
+                    unclearedCount = unclearedCount + 1
+                end
+            end
+            if t.y >= 2 and t.y <= 23 and t.x >= 2 and t.x <= 97 then
+                if t.fg == 0 then
+                    emptySkyCount = emptySkyCount + 1
+                end
             end
         end
-        Sleep(5)
     end
 
-    for tiley = 2, 23 do
-        for tilex = 2, 97 do
-            local t = safeTile(tilex, tiley)
-            if t.fg == 0 then
-                emptySkyCount = emptySkyCount + 1
-            end
-        end
-        Sleep(5)
-    end
-
-    LogToConsole("`w[`0Audit Total 100%`w] Gua Kotor: `e" .. unclearedCount .. "`w ubin | Langit Kosong: `e" .. emptySkyCount .. "`w ubin")
+    LogToConsole("`w[`0Audit World`w] Gua Kotor: `e" .. unclearedCount .. "`w ubin | Langit Kosong: `e" .. emptySkyCount .. "`w ubin")
 
     if unclearedCount > 0 or emptySkyCount > 0 then
         return false
@@ -1188,8 +1195,11 @@ function mainDF()
         LogToConsole("`w[`0Auto DF`w] World " .. nameworld .. " SUDAH BERSIH / SELESAI! Memotong ke world berikutnya...")
         return 
     end
-    
-    sendDiscordWebhookEmbed("STARTED")
+
+    -- WEBHOOK NON-BLOCKING THREAD
+    runThread(function()
+        sendDiscordWebhookEmbed("STARTED")
+    end)
 
     smpng_12()
     if not autoDF_running then return end
@@ -1222,10 +1232,14 @@ function mainDF()
     if verifyAndPatchWorld() then
         writeToLocal("finished_df.txt", os.date("[%Y-%m-%d %H:%M] ") .. nameworld .. "\n")
         LogToConsole("`w[`2SUCCESS`w] World " .. nameworld .. " selesai & dicatat ke finished_df.txt!")
-        sendDiscordWebhookEmbed("COMPLETED")
+        runThread(function()
+            sendDiscordWebhookEmbed("COMPLETED")
+        end)
     else
         LogToConsole("`4[`0Warning`4] World " .. nameworld .. " masih ada bagian belum tertutup sempurna setelah 3x penambalan!")
-        sendDiscordWebhookEmbed("WARNING", "World gagal ditutup sempurna setelah 3x penambalan!")
+        runThread(function()
+            sendDiscordWebhookEmbed("WARNING", "World gagal ditutup sempurna setelah 3x penambalan!")
+        end)
     end
 end
 
