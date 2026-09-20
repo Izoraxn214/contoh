@@ -14,13 +14,18 @@ local config = {
     drop_x             = pref:get("drop_x",             0),
     drop_y             = pref:get("drop_y",             0),
     marker_id          = pref:get("marker_id",           1422),
-    webhook_url        = pref:get("webhook_url",        ""),
     enable_anti_player = pref:get("enable_anti_player", true),
     work_min           = pref:get("work_min",           45),
     rest_min           = pref:get("rest_min",           10),
-    enable_jitter      = pref:get("enable_jitter",      true),
+    enable_jitter      = pref:get("enable_jitter",      false),
     show_punch         = pref:get("show_punch",         true),
-    pnb_timeout        = 6000,
+    
+    delay_place        = pref:get("delay_place",        120),
+    delay_punch        = pref:get("delay_punch",        140),
+    delay_harvest      = pref:get("delay_harvest",      180),
+    delay_plant        = pref:get("delay_plant",        120),
+
+    pnb_timeout        = 4000,
     pnb_retry          = 4,
 }
 
@@ -31,7 +36,6 @@ local action_count       = 0
 local thread_instance    = 0
 local session_start_time = 0
 
--- Multi-World State
 local farm_world_list    = {}
 local current_farm_index = 1
 
@@ -39,19 +43,6 @@ local function Log(msg)
     LogToConsole("`5[LoliStore] `0" .. tostring(msg))
 end
 
-local function sendWebhook(msg)
-    if not config.webhook_url or config.webhook_url == "" then return end
-    pcall(function()
-        local payload = '{"content": "' .. tostring(msg) .. '"}'
-        fetch(config.webhook_url, {
-            method  = "POST",
-            headers = { ["Content-Type"] = "application/json" },
-            body    = payload
-        })
-    end)
-end
-
--- Helper memecah string koma "WORLD1,WORLD2,WORLD3"
 local function parseWorldList(raw_str)
     local result = {}
     if not raw_str or raw_str == "" then return result end
@@ -82,23 +73,10 @@ local function isThreadActive(my_id)
     return running and not reconnecting and (thread_instance == my_id)
 end
 
-local function rSleep(base_min, base_max)
-    local base = math.random(base_min, base_max)
-    action_count = action_count + 1
-    if action_count % math.random(20, 35) == 0 then
-        base = base + math.random(800, 2500)
-    end
-    Sleep(base)
-end
-
-local function HumanSleep(ms)
-    local jitter = math.random(50, 400)
+local function ActionSleep(ms)
+    local jitter = 0
     if config.enable_jitter then
-        jitter = jitter + math.random(100, 500)
-    end
-    action_count = action_count + 1
-    if action_count % math.random(15, 25) == 0 then
-        jitter = jitter + math.random(1000, 3000)
+        jitter = math.random(10, 50)
     end
     Sleep(ms + jitter)
 end
@@ -130,7 +108,6 @@ local function checkAntiPlayer(my_id)
     for _, p in pairs(players) do
         if p and p.netID and p.netID ~= local_p.netID then
             Log("`4[DANGER] Player lain terdeteksi! Auto exit...")
-            sendWebhook("⚠️ **ALERT:** Player/Mod terdeteksi di world (**" .. tostring(p.name or "Unknown") .. "**)! Auto Exit ke main menu...")
             growtopia.warpTo("EXIT")
             running = false
             return false
@@ -144,7 +121,6 @@ local function checkWorkRestCycle(my_id)
     local elapsed_work = os.time() - session_start_time
     if elapsed_work >= (config.work_min * 60) then
         Log("Waktunya istirahat sejenak selama " .. config.rest_min .. " menit...")
-        sendWebhook("☕ **REST SESSION:** Bot istirahat sejenak selama " .. config.rest_min .. " menit untuk menjaga pola main alami.")
         
         local rest_elapsed = 0
         local total_rest_sec = config.rest_min * 60
@@ -158,7 +134,6 @@ local function checkWorkRestCycle(my_id)
         
         session_start_time = os.time()
         Log("Istirahat selesai, rotasi dilanjutkan!")
-        sendWebhook("🔄 **RESUME:** Bot selesai istirahat dan kembali bekerja.")
     end
 end
 
@@ -196,18 +171,6 @@ local function safeGetWorldName()
     return nil
 end
 
-local function waitTileFg(tx, ty, expected_fg, timeout_ms, my_id)
-    local elapsed = 0
-    while elapsed < timeout_ms do
-        if not isThreadActive(my_id) then return false end
-        local tile = safeGetTile(tx, ty)
-        if tile and tile.fg == expected_fg then return true end
-        Sleep(150)
-        elapsed = elapsed + 150
-    end
-    return false
-end
-
 local function punchTile(tx, ty)
     local p = getPlayer()
     if not p then return end
@@ -219,10 +182,10 @@ local function punchTile(tx, ty)
         px    = tx,
         py    = ty
     })
-    HumanSleep(math.random(150, 280))
+    ActionSleep(config.delay_punch)
 end
 
-local function placeBlock(tx, ty, item_id)
+local function placeBlock(tx, ty, item_id, is_plant)
     local p = getPlayer()
     if not p then return end
     sendPacketRaw(not config.show_punch, {
@@ -233,12 +196,12 @@ local function placeBlock(tx, ty, item_id)
         px    = tx,
         py    = ty
     })
-    HumanSleep(math.random(120, 220))
+    ActionSleep(is_plant and config.delay_plant or config.delay_place)
 end
 
 local function walkTo(tx, ty)
     FindPath(tx, ty)
-    HumanSleep(math.random(400, 700))
+    ActionSleep(300)
     local cx, cy = getPlayerTile()
     if cx and cy then
         return (math.abs(cx - tx) <= 2 and math.abs(cy - ty) <= 2)
@@ -266,7 +229,7 @@ local function warpToWorld(target_world, door_id, my_id)
         if not isThreadActive(my_id) then return false end
         local w = safeGetWorldName()
         if w and string.upper(w) == string.upper(target_world) then
-            rSleep(1500, 2500)
+            Sleep(1000)
             return true
         end
         Sleep(1000)
@@ -292,23 +255,10 @@ local function collectNearby(radius_px)
                     x     = obj.posX + 6,
                     y     = 0
                 })
-                Sleep(math.random(30, 60))
+                Sleep(20)
             end
         end
     end
-end
-
-local function hasDropOnTile(tx, ty)
-    local objs = safeGetObjects()
-    if not objs then return false end
-    for _, obj in pairs(objs) do
-        if obj and obj.posX and obj.posY then
-            local ox = math.floor((obj.posX + 16) / 32)
-            local oy = math.floor((obj.posY + 16) / 32)
-            if math.abs(ox - tx) <= 1 and oy == ty then return true end
-        end
-    end
-    return false
 end
 
 local function getReadyHarvestTiles()
@@ -349,7 +299,6 @@ end
 local function doPlant(my_id)
     if invCount(seed_id) < config.low_trigger then return end
 
-    Log("START PLANT")
     local plant_tiles = getPlantableTiles()
     if #plant_tiles == 0 then return end
 
@@ -360,56 +309,29 @@ local function doPlant(my_id)
         local tile = safeGetTile(t.x, t.y)
         if tile and tile.fg == 0 then
             if walkTo(t.x, t.y) then
-                placeBlock(t.x, t.y, seed_id)
+                placeBlock(t.x, t.y, seed_id, true)
             end
         end
     end
 end
 
 local function doHarvestLoop(my_id)
-    Log("START HARVEST")
+    local ready_tiles = getReadyHarvestTiles()
+    if #ready_tiles == 0 then return end
 
-    while isThreadActive(my_id) do
-        if not checkAntiPlayer(my_id) then return end
+    for _, t in ipairs(ready_tiles) do
+        if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
         if invCount(config.block_id) >= config.high_trigger then break end
 
-        local ready_tiles = getReadyHarvestTiles()
-        if #ready_tiles == 0 then break end
-
-        for _, t in ipairs(ready_tiles) do
-            if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
-            if invCount(config.block_id) >= config.high_trigger then break end
-
-            local tile = safeGetTile(t.x, t.y)
-            if tile and tile.fg == seed_id and tile.readyharvest == true then
-                local reached = walkTo(t.x, t.y)
-                if reached then
-                    local retry = 0
-                    while retry < config.pnb_retry do
-                        if not isThreadActive(my_id) then return end
-                        punchTile(t.x, t.y)
-                        if waitTileFg(t.x, t.y, 0, config.pnb_timeout, my_id) then
-                            local before_block = invCount(config.block_id)
-                            local before_seed  = invCount(seed_id)
-                            local wait_ms = 0
-                            while wait_ms < 3000 do
-                                if not isThreadActive(my_id) then return end
-                                collectNearby()
-                                if invCount(config.block_id) > before_block or invCount(seed_id) > before_seed then break end
-                                Sleep(math.random(80, 150))
-                                wait_ms = wait_ms + 100
-                            end
-                            break
-                        else
-                            retry = retry + 1
-                            rSleep(100, 200)
-                        end
-                    end
-                end
+        local tile = safeGetTile(t.x, t.y)
+        if tile and tile.fg == seed_id and tile.readyharvest == true then
+            local reached = walkTo(t.x, t.y)
+            if reached then
+                punchTile(t.x, t.y)
+                ActionSleep(config.delay_harvest)
+                collectNearby()
             end
         end
-
-        Sleep(math.random(80, 150))
     end
 end
 
@@ -423,7 +345,6 @@ local function doDrop(my_id)
 
     local target_drop_world = (config.drop_world and config.drop_world ~= "") and config.drop_world or getCurrentFarmWorld()
 
-    -- 1. Warp ke World Storage Drop
     local ok_drop_warp = warpToWorld(target_drop_world, config.drop_door, my_id)
     if not ok_drop_warp then
         Log("Gagal warp ke Storage World! Batal drop seed demi keamanan.")
@@ -432,7 +353,6 @@ local function doDrop(my_id)
 
     if not isThreadActive(my_id) then return end
 
-    -- 2. Drop Seed (Shift X-1 jika penuh)
     local try_x = config.drop_x
     local try_y = config.drop_y
     local dropped = false
@@ -443,18 +363,17 @@ local function doDrop(my_id)
         if try_x < 0 then break end
 
         walkTo(try_x, try_y)
-        rSleep(400, 700)
+        Sleep(300)
 
         local before_count = invCount(seed_id)
         sendPacket(2, "action|drop\nitemID|" .. seed_id .. "\n")
-        rSleep(300, 500)
+        Sleep(200)
         sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. seed_id .. "|\ncount|" .. amount .. "\n")
-        rSleep(400, 700)
+        Sleep(300)
 
         if invCount(seed_id) < before_count then
             dropped = true
-            Log("DROP berhasil di X=" .. try_x .. ", Y=" .. try_y .. " (" .. amount .. " seed)")
-            sendWebhook("📦 **DROP SUCCESS:** Berhasil melempar " .. amount .. " seed di world **" .. tostring(target_drop_world) .. "** (Posisi X=" .. try_x .. ", Y=" .. try_y .. ").")
+            Log("DROP berhasil di X=" .. try_x .. ", Y=" .. try_y .. " (" .. amount + 0 .. " seed)")
             
             if try_x ~= config.drop_x then
                 config.drop_x = try_x
@@ -474,21 +393,50 @@ local function doDrop(my_id)
         Log("DROP gagal di semua titik percobaan!")
     end
 
-    -- 3. Warp Kembali ke Current Farm World
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id)
 end
 
+-- LOGIKA BARU: PTHT Terus Menerus Sampai World Bersih
 local function doPTHT(my_id)
-    doPlant(my_id)
-    if not isThreadActive(my_id) then return end
+    Log("START PTHT (Membersihkan world dari tanaman & panenan...)")
 
-    if invCount(seed_id) >= config.high_trigger then
-        doDrop(my_id)
-        if not isThreadActive(my_id) then return end
-    end
+    while isThreadActive(my_id) do
+        if not checkAntiPlayer(my_id) then return end
 
-    if invCount(config.block_id) <= config.low_trigger or invCount(seed_id) <= config.low_trigger then
-        doHarvestLoop(my_id)
+        if invCount(seed_id) >= config.high_trigger then
+            doDrop(my_id)
+            if not isThreadActive(my_id) then return end
+        end
+
+        local plant_tiles = getPlantableTiles()
+        local ready_tiles = getReadyHarvestTiles()
+
+        -- Jika tidak ada lagi yang bisa ditanam DAN tidak ada lagi yang matang, selesai di world ini!
+        if #plant_tiles == 0 and #ready_tiles == 0 then
+            Log("World ini sudah bersih total dari PTHT.")
+            break
+        end
+
+        local action_performed = false
+
+        if #plant_tiles > 0 and invCount(seed_id) >= config.low_trigger then
+            doPlant(my_id)
+            action_performed = true
+            if not isThreadActive(my_id) then return end
+        end
+
+        if #ready_tiles > 0 and invCount(config.block_id) < config.high_trigger then
+            doHarvestLoop(my_id)
+            action_performed = true
+            if not isThreadActive(my_id) then return end
+        end
+
+        -- Jika dalam satu siklus tidak ada aksi yang bisa dilakukan (misal kekurangan item/seed), keluar loop
+        if not action_performed then
+            break
+        end
+
+        Sleep(200)
     end
 end
 
@@ -506,7 +454,7 @@ end
 local function doPnb(my_id)
     Log("START PNB (5-Tile Horizontal)")
     walkTo(config.pnb_x, config.pnb_y)
-    rSleep(500, 800)
+    Sleep(300)
 
     while isThreadActive(my_id) do
         if not checkAntiPlayer(my_id) then return end
@@ -517,7 +465,7 @@ local function doPnb(my_id)
         local cx, cy = getPlayerTile()
         if not cx or cx ~= config.pnb_x or cy ~= config.pnb_y then
             walkTo(config.pnb_x, config.pnb_y)
-            rSleep(500, 800)
+            Sleep(300)
             cx, cy = getPlayerTile()
             if not cx then return end
         end
@@ -529,7 +477,7 @@ local function doPnb(my_id)
             if invCount(config.block_id) <= 0 then break end
             local tile = safeGetTile(t.x, t.y)
             if tile and tile.fg == 0 then
-                placeBlock(t.x, t.y, config.block_id)
+                placeBlock(t.x, t.y, config.block_id, false)
             end
         end
 
@@ -556,14 +504,14 @@ local function reconnectMonitor(my_id)
         local w = safeGetWorldName()
         if not p or not w then
             reconnecting = true
-            sendWebhook("⚠️ **RECONNECTING:** Bot terputus dari server. Mencoba kembali ke world...")
+            Log("Mencoba reconnecting kembali ke world...")
             
             while running and (thread_instance == my_id) do
-                Sleep(math.random(1800, 2500))
+                Sleep(2000)
                 local target_w = getCurrentFarmWorld()
                 local ok = warpToWorld(target_w, config.farm_door, my_id)
                 if ok then
-                    sendWebhook("✅ **RECONNECTED:** Berhasil masuk kembali ke world **" .. tostring(target_w) .. "**.")
+                    Log("Berhasil reconnect ke world " .. tostring(target_w))
                     break
                 end
             end
@@ -588,7 +536,6 @@ local function mainLoop(my_id)
     action_count       = 0
     session_start_time = os.time()
 
-    -- Inisialisasi World List
     farm_world_list    = parseWorldList(config.farm_world)
     current_farm_index = 1
 
@@ -598,7 +545,6 @@ local function mainLoop(my_id)
     end
 
     Log("ROTASI MULAI! Total Farm World: " .. #farm_world_list)
-    sendWebhook("🚀 **BOT STARTED:** Auto Rotasi diaktifkan (" .. #farm_world_list .. " World Farm).")
 
     runThread(function() reconnectMonitor(my_id) end)
 
@@ -606,7 +552,6 @@ local function mainLoop(my_id)
         checkWorkRestCycle(my_id)
         if not checkAntiPlayer(my_id) then break end
 
-        -- 1. Masuk ke Farm World aktif saat ini
         local target_farm = getCurrentFarmWorld()
         local ok_farm = warpToWorld(target_farm, config.farm_door, my_id)
 
@@ -620,7 +565,7 @@ local function mainLoop(my_id)
                 if pnb_result == "low_block" then
                     doPTHT(my_id)
                     if not isThreadActive(my_id) then break end
-                    nextFarmWorld() -- Selesai di world ini, ganti ke world berikutnya
+                    nextFarmWorld()
                 else
                     if invCount(seed_id) >= config.high_trigger then
                         doDrop(my_id)
@@ -628,16 +573,17 @@ local function mainLoop(my_id)
                     end
                 end
             else
+                -- Jalankan PTHT berulang sampai world benar-benar bersih, baru pindah world
                 doPTHT(my_id)
                 if not isThreadActive(my_id) then break end
-                nextFarmWorld() -- Selesai di world ini, ganti ke world berikutnya
+                nextFarmWorld()
             end
         else
             Log("Gagal warp ke Farm World: " .. target_farm .. ", mencoba ke world berikutnya...")
             nextFarmWorld()
         end
 
-        rSleep(200, 400)
+        Sleep(200)
     end
 end
 
@@ -652,6 +598,14 @@ ui:addChildInputString(dialog_main.menu, "Farm Door",     config.farm_door,    "
 ui:addChildInputInt(dialog_main.menu,    "Block ID",      config.block_id,     "ID",    "ID block (bukan seed)",              "Verified", "block_id")
 ui:addChildInputInt(dialog_main.menu,    "High Trigger",  config.high_trigger, "amt",   "seed>=ini->Drop (def:180)",          "Verified", "high_trigger")
 ui:addChildInputInt(dialog_main.menu,    "Low Trigger",   config.low_trigger,  "amt",   "block/seed<=ini->stop (def:10)",     "Verified", "low_trigger")
+
+ui:addDivider()
+
+local dialog_delay = ui:addDialog("Delay & Speed Settings", "Pengaturan kecepatan aksi (dalam ms)", {})
+ui:addChildInputInt(dialog_delay.menu, "Place Delay (ms)",   config.delay_place,   "ms", "Delay menaruh block (def: 120)", "Verified", "delay_place")
+ui:addChildInputInt(dialog_delay.menu, "Punch Delay (ms)",   config.delay_punch,   "ms", "Delay memukul ubin (def: 140)",  "Verified", "delay_punch")
+ui:addChildInputInt(dialog_delay.menu, "Harvest Delay (ms)", config.delay_harvest, "ms", "Delay memanen pohon (def: 180)", "Verified", "delay_harvest")
+ui:addChildInputInt(dialog_delay.menu, "Plant Delay (ms)",   config.delay_plant,   "ms", "Delay menanam seed (def: 120)",  "Verified", "delay_plant")
 
 ui:addDivider()
 
@@ -671,8 +625,7 @@ ui:addChildButton(dialog_drop.menu, "Set dari posisi sekarang", "btn_drop_set")
 
 ui:addDivider()
 
-local dialog_sec = ui:addDialog("Security & Anti-Ban", "Proteksi akun & notifikasi", {})
-ui:addChildInputString(dialog_sec.menu, "Webhook Discord",      config.webhook_url,        "URL", "https://discord.com/api/webhooks/...", "Verified", "webhook_url")
+local dialog_sec = ui:addDialog("Security & Anti-Ban", "Proteksi akun", {})
 ui:addChildToggle(dialog_sec.menu,      "Anti Player/Mod",      config.enable_anti_player, "enable_anti_player")
 ui:addChildToggle(dialog_sec.menu,      "Show Punch (Visual)",  config.show_punch,         "show_punch")
 ui:addChildInputInt(dialog_sec.menu,    "Jam Kerja (Menit)",    config.work_min,           "min", "Durasi kerja sebelum istirahat",        "Verified", "work_min")
@@ -696,12 +649,15 @@ local temp = {
     pnb_y              = tostring(config.pnb_y),
     drop_x             = tostring(config.drop_x),
     drop_y             = tostring(config.drop_y),
-    webhook_url        = config.webhook_url,
     enable_anti_player = config.enable_anti_player,
     show_punch         = config.show_punch,
     work_min           = tostring(config.work_min),
     rest_min           = tostring(config.rest_min),
     enable_jitter      = config.enable_jitter,
+    delay_place        = tostring(config.delay_place),
+    delay_punch        = tostring(config.delay_punch),
+    delay_harvest      = tostring(config.delay_harvest),
+    delay_plant        = tostring(config.delay_plant),
 }
 
 function OnDraw(d)
@@ -724,12 +680,15 @@ function OnValue(type, name, value)
     elseif name == "pnb_y"              then temp.pnb_y              = tostring(value)
     elseif name == "drop_x"             then temp.drop_x             = tostring(value)
     elseif name == "drop_y"             then temp.drop_y             = tostring(value)
-    elseif name == "webhook_url"        then temp.webhook_url        = value
     elseif name == "enable_anti_player" then temp.enable_anti_player = value
     elseif name == "show_punch"         then temp.show_punch         = value
     elseif name == "work_min"           then temp.work_min           = tostring(value)
     elseif name == "rest_min"           then temp.rest_min           = tostring(value)
     elseif name == "enable_jitter"      then temp.enable_jitter      = value
+    elseif name == "delay_place"        then temp.delay_place        = tostring(value)
+    elseif name == "delay_punch"        then temp.delay_punch        = tostring(value)
+    elseif name == "delay_harvest"      then temp.delay_harvest      = tostring(value)
+    elseif name == "delay_plant"        then temp.delay_plant        = tostring(value)
 
     elseif name == "btn_pnb_set" then
         local p = getPlayer()
@@ -771,12 +730,15 @@ function OnValue(type, name, value)
         config.pnb_y              = tonumber(temp.pnb_y)        or config.pnb_y
         config.drop_x             = tonumber(temp.drop_x)       or config.drop_x
         config.drop_y             = tonumber(temp.drop_y)       or config.drop_y
-        config.webhook_url        = temp.webhook_url
         config.enable_anti_player = temp.enable_anti_player
         config.show_punch         = temp.show_punch
         config.work_min           = tonumber(temp.work_min)     or config.work_min
         config.rest_min           = tonumber(temp.rest_min)     or config.rest_min
         config.enable_jitter      = temp.enable_jitter
+        config.delay_place        = tonumber(temp.delay_place)  or config.delay_place
+        config.delay_punch        = tonumber(temp.delay_punch)  or config.delay_punch
+        config.delay_harvest      = tonumber(temp.delay_harvest) or config.delay_harvest
+        config.delay_plant        = tonumber(temp.delay_plant)  or config.delay_plant
 
         seed_id = config.block_id + 1
 
@@ -791,15 +753,18 @@ function OnValue(type, name, value)
         pref:set("pnb_y",              config.pnb_y)
         pref:set("drop_x",             config.drop_x)
         pref:set("drop_y",             config.drop_y)
-        pref:set("webhook_url",        config.webhook_url)
         pref:set("enable_anti_player", config.enable_anti_player)
         pref:set("show_punch",         config.show_punch)
         pref:set("work_min",           config.work_min)
         pref:set("rest_min",           config.rest_min)
         pref:set("enable_jitter",      config.enable_jitter)
+        pref:set("delay_place",        config.delay_place)
+        pref:set("delay_punch",        config.delay_punch)
+        pref:set("delay_harvest",      config.delay_harvest)
+        pref:set("delay_plant",        config.delay_plant)
         pref:save()
 
-        growtopia.notify("Config & Security tersimpan!")
+        growtopia.notify("Config & Delay tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
@@ -838,7 +803,6 @@ function OnValue(type, name, value)
             thread_instance = thread_instance + 1
             running = false
             Log("Rotasi dihentikan.")
-            sendWebhook("🛑 **BOT STOPPED:** Auto Rotasi dihentikan secara manual.")
         end
     end
 end
