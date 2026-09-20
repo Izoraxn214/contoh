@@ -36,10 +36,10 @@ VerifyPunch = false
 
 DFWorldDoor = "IWP2145"
 
--- LOGIKA AUTO DROP & COOLDOWN ANTI SHADOWBAN (SWEET SPOT 15 DETIK)
+-- LOGIKA AUTO DROP & COOLDOWN ANTI SHADOWBAN
 AutoDropEnabled = true
 lastDropTime = 0
-DropCooldown = 15 -- Cooldown ideal 15 detik antar Drop (Cepat & Anti Spam Warp)
+DropCooldown = 15 -- Cooldown minimal 15 detik dari SETELAH mendarat balik di World DF
 
 DropWorld = "PLATSAVEHAM"
 DropDoor = "12345"
@@ -170,7 +170,6 @@ end
 function warp(worldName, doorId)
     if not worldName or worldName == "" then return false end
     
-    -- Jeda aman sebelum warp untuk menghindari shadowban
     Sleep(1000)
 
     local target = worldName
@@ -532,11 +531,11 @@ function setupNewRandomWorld()
     return true
 end
 
--- LOGIKA AUTO DROP DENGAN COOLDOWN ANTI SPAM WARP & SISAKAN 50 DIRT
+-- LOGIKA AUTO DROP DENGAN AKURASI PERHITUNGAN COOLDOWN FIXED
 function processAutoDropAndTrash()
     if not autoDF_running or not AutoDropEnabled then return end
 
-    -- Pengecekan Cooldown (Minimal 15 detik antar proses drop)
+    -- Pengecekan Cooldown (Diukur dari WAKTU KEMBALI di World DF)
     local currentTime = os.time()
     if (currentTime - lastDropTime) < DropCooldown then
         return
@@ -559,7 +558,6 @@ function processAutoDropAndTrash()
                 end
 
                 if dropAmount > 0 then
-                    lastDropTime = os.time() -- Catat waktu drop terakhir
                     LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Dropping " .. dropAmount .. " ke World: " .. DropWorld)
                     
                     warp(DropWorld, DropDoor)
@@ -578,6 +576,9 @@ function processAutoDropAndTrash()
                     Sleep(7000)
                     waitForTilesToLoad()
                     Sleep(1000)
+
+                    -- FIX LOGIC BUG: Waktu dicatat KETIKA SUDAH MENDARAT LAGI DI WORLD DF
+                    lastDropTime = os.time()
                 end
             end
         end
@@ -654,14 +655,12 @@ function ambilSeed(id, jumlah)
     end
 end
 
--- LOGIKA DINAMIS: AMBIL DIRT DARI STORAGE DULU, FALLBACK TANAM Y=25 JIKA HABIS
 function plntDf_122()
     if not autoDF_running then return end
     if inv(2) >= 30 then return end
 
     LogToConsole("`w[`0Auto DF`w] Dirt Block kurang (" .. inv(2) .. "/30). Mengambil langsung dari Storage: " .. worldsaveseed)
 
-    -- 1. UTAMA: Coba ambil Dirt Block (ID 2) langsung dari Storage
     ambilSeed(2, 50)
     
     if inv(2) >= 30 then
@@ -669,7 +668,6 @@ function plntDf_122()
         return
     end
 
-    -- 2. FALLBACK: Jika di Storage habis, baru tanam mandiri di Y=25
     LogToConsole("`4[`0Warning`4] Dirt Block di Storage habis! Menanam batch Dirt Seed di Y=25 sebagai cadangan...")
 
     while autoDF_running and inv(2) < 30 do
@@ -687,7 +685,6 @@ function plntDf_122()
                 Sleep(dpc)
             end
 
-            -- Hanya tanam jika ubin benar-benar KOSONG (tidak menimpa Farmable)
             if safeTile(tilex, 25).fg == 0 and inv(3) > 0 then
                 walkTo(tilex - 1, 25, 1000)
                 trh1_3(tilex, 25, 3)
@@ -701,7 +698,6 @@ function plntDf_122()
             break
         end
 
-        -- Tunggu Pohon Tumbuh
         local waitTime = 0
         while autoDF_running and waitTime < 32 do
             local readyCount = 0
@@ -716,9 +712,8 @@ function plntDf_122()
             waitTime = waitTime + 1
         end
 
-        -- Panen Pohon
         for tilex = 2, 25 do
-            if not autoDF_running then return end
+            if not autoDF_running then break end
 
             if safeTile(tilex, 25).fg == 3 and safeTile(tilex, 25).readyharvest then
                 walkTo(tilex - 1, 25, 1000)
@@ -1055,7 +1050,6 @@ function clearLeftoverSafe()
             if not autoDF_running then return end
             local tile = safeTile(tilex, tiley)
 
-            -- Memanen POHON DIRT (FG=3) saja
             if tile.fg == 3 then
                 walkTo(tilex, tiley + 1, 1500)
                 Sleep(150)
@@ -1074,7 +1068,6 @@ function clearLeftoverSafe()
                 end
             end
 
-            -- Ambil item tercecer
             for _, obj in pairs(safeGetObjectList()) do
                 if obj then
                     local ox = math.floor(((obj.posX or 0) + 8) / 32)
@@ -1109,21 +1102,18 @@ function isWorldAlreadyDone()
 
     for _, t in pairs(tiles) do
         if t and t.x and t.y then
-            -- 1. Gua Bawah (Y=24 s.d 53)
             if t.y >= 24 and t.y <= 53 and t.x >= 0 and t.x <= 99 then
                 if t.bg == 14 or (t.fg ~= 0 and not isUnbreakable(t.fg)) then 
                     unclearedCount = unclearedCount + 1
                 end
             end
 
-            -- 2. Langit Atas (Y=2 s.d 23) -> Wajib Dirt Block (FG=2) atau diproteksi
             if t.y >= 2 and t.y <= 23 and t.x >= 2 and t.x <= 97 then
                 if t.fg ~= 2 and not isUnbreakable(t.fg) then
                     emptySkyCount = emptySkyCount + 1
                 end
             end
 
-            -- 3. Cek Pohon Dirt Tertanam di Seluruh Area Farm (Y=2 s.d 25)
             if t.y >= 2 and t.y <= 25 and t.fg == 3 then
                 leftoverTreeCount = leftoverTreeCount + 1
             end
