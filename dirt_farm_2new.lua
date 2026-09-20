@@ -17,7 +17,7 @@ StoragePlatDoor = "12345"
 PickPlat_Enabled = true
 
 WorldLockID = 242
-EntranceID = 6
+EntranceID = 5036
 
 EditToggle("Antibounce", true)
 EditToggle("ModFly", true)
@@ -36,7 +36,7 @@ VerifyPunch = false
 
 DFWorldDoor = "IWP2145"
 
--- LOGIKA AUTO DROP 8 SLOTS (SAFE DIALOG TIMING)
+-- LOGIKA AUTO DROP 8 SLOTS
 AutoDropEnabled = true
 
 DropWorld = "PLATSAVEHAM"
@@ -80,9 +80,14 @@ RandWithNumber = false
 
 math.randomseed(os.time())
 
+-- PROTEKSI UBIN UNBREAKABLE (SINKRON MGUI DENGAN VARIABLE DINAMIS)
 local function isUnbreakable(fg)
     local id = tonumber(fg) or 0
-    return id == 8 or id == 6 or id == 242 or id == 202 or id == 204 or id == 206 or id == 2408 or id == 4994 or id == 1790
+    local dynamicDoorID = tonumber(PickDoor_ID) or 5036
+    local dynamicWLID = tonumber(PickWL_ID) or 242
+    return id == 8 or id == 6 or id == dynamicWLID or id == 202 or id == 204 or id == 206 
+        or id == 2408 or id == 4994 or id == 1790 
+        or id == dynamicDoorID or id == tonumber(EntranceID)
 end
 
 local function formatTime(seconds)
@@ -93,15 +98,24 @@ local function formatTime(seconds)
 end
 
 local function sendDiscordWebhookEmbed(statusType, customMessage)
-    if not WebhookEnabled or WebhookURL == "" or not WebhookURL:find("http") then return end
+    if not WebhookEnabled then return end
+
+    if WebhookURL == "" or not WebhookURL:find("http") then 
+        LogToConsole("`4[`0Webhook Error`4] URL Webhook kosong/tidak valid!")
+        return 
+    end
 
     local pName = "Unknown"
     local p = getLocal()
-    if p and p.name then pName = p.name end
+    if p and p.name then 
+        pName = p.name:gsub('"', '\\"'):gsub('\n', '') 
+    end
 
     local execTimeStr = formatTime(os.time() - worldStartTime)
     local uptimeStr = formatTime(os.time() - botStartTime)
     local progressStr = index_world .. " / " .. #WorldList
+    local currentWorld = safeGetWorldName()
+    if currentWorld == "" then currentWorld = nameworld end
 
     local title = "DIRT FARM COMPLETED"
     local color = 3066993 -- Hijau
@@ -114,46 +128,44 @@ local function sendDiscordWebhookEmbed(statusType, customMessage)
     elseif statusType == "WARNING" or statusType == "ERROR" then
         title = "DIRT FARM ALERT"
         color = 15158332 -- Merah
-        statusDesc = customMessage or "Need Attention!"
+        statusDesc = (customMessage or "Need Attention!"):gsub('"', '\\"'):gsub('\n', '')
     end
 
     local pingText = ""
     if WebhookUserID ~= "" and (statusType == "WARNING" or statusType == "ERROR") then
-        pingText = "<@" .. WebhookUserID .. "> "
+        pingText = "<@" .. WebhookUserID .. ">"
     end
 
-    local jsonPayload = string.format([[
-    {
-      "content": "%s",
-      "username": "LOLIStore Helper",
-      "embeds": [
-        {
-          "title": "%s",
-          "color": %d,
-          "fields": [
-            { "name": "Account", "value": "%s", "inline": true },
-            { "name": "World", "value": "%s", "inline": true },
-            { "name": "Progress", "value": "%s", "inline": true },
-            { "name": "Execute Time", "value": "%s", "inline": true },
-            { "name": "Total Uptime", "value": "%s", "inline": true },
-            { "name": "Status", "value": "%s", "inline": true }
-          ],
-          "footer": {
-            "text": "Script Dirt Farm by LOLIStore • %s"
-          }
-        }
-      ]
-    }]], pingText, title, color, pName, nameworld, progressStr, execTimeStr, uptimeStr, statusDesc, os.date("%Y-%m-%d %H:%M:%S"))
+    local jsonPayload = string.format([[{"content":"%s","username":"LOLIStore Helper","embeds":[{"title":"%s","color":%d,"fields":[{"name":"Account","value":"%s","inline":true},{"name":"World","value":"%s","inline":true},{"name":"Progress","value":"%s","inline":true},{"name":"Execute Time","value":"%s","inline":true},{"name":"Total Uptime","value":"%s","inline":true},{"name":"Status","value":"%s","inline":true}],"footer":{"text":"Script Dirt Farm by LOLIStore • %s"}}]} ]], 
+        pingText, title, color, pName, currentWorld, progressStr, execTimeStr, uptimeStr, statusDesc, os.date("%Y-%m-%d %H:%M:%S"))
+
+    local sent = false
 
     pcall(function()
-        if type(makeRequest) == "function" then
+        if type(fetch) == "function" then
+            local res, err = fetch(WebhookURL, {
+                method = "POST",
+                headers = { ["Content-Type"] = "application/json" },
+                body = jsonPayload
+            })
+            if not res and err then
+                res, err = fetch(WebhookURL, "POST", jsonPayload)
+            end
+            sent = true
+        elseif type(makeRequest) == "function" then
             makeRequest(WebhookURL, "POST", {["Content-Type"] = "application/json"}, jsonPayload)
+            sent = true
         elseif type(httpPost) == "function" then
             httpPost(WebhookURL, jsonPayload)
-        elseif type(httpRequest) == "function" then
-            httpRequest(WebhookURL, "POST", jsonPayload)
+            sent = true
         end
     end)
+
+    if sent then
+        LogToConsole("`w[`2Webhook`w] Request terkirim ke Discord! Status: " .. statusType)
+    else
+        LogToConsole("`4[`0Webhook Error`4] Gagal! Fungsi HTTP (fetch) tidak terdeteksi.")
+    end
 end
 
 local function generateRandomWorld(length, withNum)
@@ -282,7 +294,6 @@ function walkTo(targetX, targetY, maxWaitMs)
     return false
 end
 
--- FIX NO 3: DYNAMIC PACKET STATE (MENGGUNAKAN STATE ASLI KARAKTER)
 function tnjk1_3(x, y)
     if not EnableBreak or not autoDF_running then return false end
     
@@ -301,7 +312,7 @@ function tnjk1_3(x, y)
 
     local packet = {}
     packet.type = 3
-    packet.state = (p and p.state) and p.state or 0 -- Dynamic state dari local player
+    packet.state = (p and p.state) and p.state or 0
     packet.value = 18
     packet.px = math.floor(x)
     packet.py = math.floor(y)
@@ -365,7 +376,6 @@ function sdtr_11(object)
     sendPacketRaw(false, packet)
 end
 
--- FIX NO 4: LIMIT 3 ITEM PER CYCLE + DELAY 250ms (ANTI-SPAM PACKET 11)
 function sdt_11(range)
     local localPlayer = getLocal()
     if not localPlayer then return end
@@ -377,10 +387,10 @@ function sdt_11(range)
         if object then
             local itemID = math.floor(tonumber(object.itemid or object.type or object.item_id) or 0)
             if math.abs(localPlayer.posX - (object.posX or 0)) <= (32 * range) and
-               math.abs(localPlayer.posY - (object.posY or 0)) < (32 * range) and inv(itemID) < 200 then
+               math.abs(localPlayer.posY - (object.posY or 0)) <= (32 * range) and inv(itemID) < 200 then
                 sdtr_11(object)
                 pickedCount = pickedCount + 1
-                Sleep(250) -- Delay dinaikkan agar natural
+                Sleep(250)
                 if pickedCount >= maxPickPerCycle then
                     break
                 end
@@ -407,12 +417,11 @@ function findMainDoor()
     return 50, 29
 end
 
+-- RESTOCK SETUP ITEMS (JALAN DULU BARU SEDOT RANGE 1 TILE)
 function ensureSetupItems()
     if not autoDF_running then return end
 
-    if #safeGetInventory() == 0 then
-        Sleep(1500)
-    end
+    if #safeGetInventory() == 0 then Sleep(1500) end
 
     local currentWL = inv(WorldLockID)
     local currentDoor = inv(EntranceID)
@@ -426,7 +435,7 @@ function ensureSetupItems()
         local targetStorageDoor = PickWL_Door ~= "" and PickWL_Door or PickDoor_Door
 
         if targetStorageWorld == "" then
-            LogToConsole("`4[`0Setup Error`4] World Storage WL/Door belum diisi di menu Auto Pick!")
+            LogToConsole("`4[`0Setup Error`4] World Storage WL/Door belum diisi!")
             sendDiscordWebhookEmbed("WARNING", "World Storage WL/Door belum diisi!")
             return
         end
@@ -445,16 +454,17 @@ function ensureSetupItems()
                     local itemID = math.floor(tonumber(object.itemid or object.type or object.item_id) or 0)
                     if itemID == WorldLockID or itemID == EntranceID then
                         foundAny = true
-                        local targetX = math.max(0, math.floor(((object.posX or 0) + 8) / 32) - 1)
+                        local targetX = math.floor(((object.posX or 0) + 8) / 32)
                         local targetY = math.floor((object.posY or 0) / 32)
+                        
                         walkTo(targetX, targetY, 2000)
-                        Sleep(500)
+                        Sleep(400)
+                        
                         sdtr_11(object)
-                        sdt_11(5)
+                        sdt_11(1) -- RANGE 1 TILE SETELAH ARRIVED
                         Sleep(500)
-                        if inv(WorldLockID) > 0 and inv(EntranceID) >= 2 then
-                            break
-                        end
+                        
+                        if inv(WorldLockID) > 0 and inv(EntranceID) >= 2 then break end
                     end
                 end
             end
@@ -547,7 +557,6 @@ function setupNewRandomWorld()
     return true
 end
 
--- FIX NO 1: AUTO DROP JEDA 600ms MENUNGGU DIALOG RESMI SERVER
 function processAutoDropAndTrash()
     if not autoDF_running or not AutoDropEnabled then return end
 
@@ -567,7 +576,7 @@ function processAutoDropAndTrash()
                 walkTo(slot.x, slot.y, 2000)
                 Sleep(1000)
                 sendPacket(2, "action|drop\nitemID|" .. slot.id)
-                Sleep(600) -- Jeda aman menunggu server membuka dialog secara resmi
+                Sleep(600)
                 sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. slot.id .. "|\ncount|" .. jml)
                 Sleep(2000)
                 warpDFWorld(currentWorld)
@@ -578,43 +587,13 @@ function processAutoDropAndTrash()
     end
 end
 
+-- PROCESS AUTO PICK UTAMA (RANGE 5 UBIN DI WORLD KERJA)
 function processAutoPick()
     if not autoDF_running then return end
-    if AutoPickEnabled and AutoFind_Enabled then
+    if AutoPickEnabled then
         sdt_11(5)
     end
     processAutoDropAndTrash()
-end
-
-function findEmptyTile(radius)
-    local p = getLocal()
-    if not p or not p.posX or not p.posY then return nil end
-    local px = p.posX // 32
-    local py = p.posY // 32
-
-    for x = -radius, radius do
-        for y = -radius, radius do
-            local tx = px + x
-            local ty = py + y
-            local tile = safeTile(tx, ty)
-
-            if tile ~= nil then
-                local dropCount = 0
-                for _, obj in pairs(safeGetObjectList()) do
-                    if obj then
-                        local ox = math.floor(((obj.posX or 0) + 8) / 32)
-                        local oy = math.floor((obj.posY or 0) / 32)
-                        if ox == tx and oy == ty then dropCount = dropCount + 1 end
-                    end
-                end
-
-                if tile.fg == 0 and dropCount == 0 then
-                    return { x = tx, y = ty }
-                end
-            end
-        end
-    end
-    return nil
 end
 
 function cekSeed()
@@ -622,6 +601,7 @@ function cekSeed()
     processAutoDropAndTrash()
 end
 
+-- RESTOCK SEED (JALAN DULU BARU SEDOT RANGE 1 TILE)
 function ambilSeed(id, jumlah)
     if not autoDF_running then return end
     if inv(id) < jumlah then
@@ -643,13 +623,16 @@ function ambilSeed(id, jumlah)
                     local itemID = math.floor(tonumber(object.itemid or object.type or object.item_id) or 0)
                     if itemID == math.floor(tonumber(id) or 0) then
                         foundAny = true
-                        local targetX = math.max(0, math.floor(((object.posX or 0) + 8) / 32) - 1)
+                        local targetX = math.floor(((object.posX or 0) + 8) / 32)
                         local targetY = math.floor((object.posY or 0) / 32)
+                        
                         walkTo(targetX, targetY, 2000)
-                        Sleep(500)
+                        Sleep(400)
+                        
                         sdtr_11(object)
-                        sdt_11(5)
-                        Sleep(600)
+                        sdt_11(1) -- RANGE 1 TILE SETELAH ARRIVED
+                        Sleep(500)
+                        
                         if inv(id) >= jumlah then break end
                     end
                 end
@@ -677,12 +660,13 @@ function ambilSeed(id, jumlah)
     end
 end
 
+-- DIRT TREE PLANTING
 function plntDf_122()
     if not autoDF_running then return end
     if inv(2) >= 30 then return end
 
     LogToConsole("`w[`0Auto DF`w] Kehabisan Dirt Block! Menanam & memanen Dirt Seed mandiri...")
-    walkTo(2, 22, 2000)
+    walkTo(1, 22, 2000)
     Sleep(500)
 
     while autoDF_running do
@@ -691,26 +675,32 @@ function plntDf_122()
             if inv(3) == 0 then
                 ambilSeed(3, 50)
                 Sleep(200)
+                walkTo(tilex - 1, 22, 1500)
+                Sleep(200)
             end
 
-            local tile = safeTile(tilex, 23)
+            local targetY = 23
+            local standX = tilex - 1
+            local standY = 22
+
+            local tile = safeTile(tilex, targetY)
 
             if tile.fg == 3 and tile.readyharvest then
-                walkTo(tilex, 22, 1500)
-                Sleep(200)
-                while safeTile(tilex, 23).fg == 3 and safeTile(tilex, 23).readyharvest and autoDF_running do
-                    tnjk1_3(tilex, 23)
+                walkTo(standX, standY, 1500)
+                Sleep(150)
+                while safeTile(tilex, targetY).fg == 3 and safeTile(tilex, targetY).readyharvest and autoDF_running do
+                    tnjk1_3(tilex, targetY)
                     Sleep(dbk)
                 end
-                sdt_11(5)
+                sdt_11(1)
                 processAutoDropAndTrash()
             end
 
-            if tile.fg == 0 and inv(3) > 0 then
-                walkTo(tilex, 22, 1500)
-                Sleep(200)
-                while safeTile(tilex, 23).fg == 0 and inv(3) > 0 and autoDF_running do
-                    trh1_3(tilex, 23, 3)
+            if safeTile(tilex, targetY).fg == 0 and inv(3) > 0 then
+                walkTo(standX, standY, 1500)
+                Sleep(150)
+                while safeTile(tilex, targetY).fg == 0 and inv(3) > 0 and autoDF_running do
+                    trh1_3(tilex, targetY, 3)
                     Sleep(dpc)
                 end
             end
@@ -789,6 +779,7 @@ function smpng_12()
     clearSideColumns(98, 99, 99)
 end
 
+-- RESTOCK PLATFORM (JALAN DULU BARU SEDOT RANGE 1 TILE)
 function plfS_15()
     if not autoDF_running or not PickPlat_Enabled then return end
 
@@ -812,15 +803,18 @@ function plfS_15()
                 if not autoDF_running then return end
                 if object then
                     local itemID = math.floor(tonumber(object.itemid or object.type or object.item_id) or 0)
-                    if itemID == math.floor(tonumber(PlatformID) or 102) then
+                    if itemID == math.floor(tonumber(PlatformID) or 1324) then
                         foundAny = true
-                        local targetX = math.max(0, math.floor(((object.posX or 0) + 8) / 32) - 1)
+                        local targetX = math.floor(((object.posX or 0) + 8) / 32)
                         local targetY = math.floor((object.posY or 0) / 32)
+                        
                         walkTo(targetX, targetY, 2000)
                         Sleep(400)
+                        
                         sdtr_11(object)
-                        sdt_11(5)
+                        sdt_11(1) -- RANGE 1 TILE SETELAH ARRIVED
                         Sleep(500)
+                        
                         if inv(PlatformID) >= 52 then break end
                     end
                 end
@@ -1072,7 +1066,7 @@ function clearLeftoverSafe()
                     tnjk1_3(tilex, tiley)
                     Sleep(dbk)
                 end
-                sdt_11(5)
+                sdt_11(1)
                 processAutoDropAndTrash()
             end
 
@@ -1789,12 +1783,16 @@ function onValue(type_evt, name, value)
     elseif name == "pick_door_toggle" then PickDoor_Enabled = value
     elseif name == "pick_door_world" then PickDoor_World = tostring(value)
     elseif name == "pick_door_doorid" then PickDoor_Door = tostring(value)
-    elseif name == "pick_door_id" then PickDoor_ID = math.floor(tonumber(value) or 0)
+    elseif name == "pick_door_id" then 
+        PickDoor_ID = math.floor(tonumber(value) or 5036)
+        EntranceID = PickDoor_ID
     
     elseif name == "pick_wl_toggle" then PickWL_Enabled = value
     elseif name == "pick_wl_world" then PickWL_World = tostring(value)
     elseif name == "pick_wl_doorid" then PickWL_Door = tostring(value)
-    elseif name == "pick_wl_id" then PickWL_ID = math.floor(tonumber(value) or 242)
+    elseif name == "pick_wl_id" then 
+        PickWL_ID = math.floor(tonumber(value) or 242)
+        WorldLockID = PickWL_ID
     
     elseif name == "pick_plat_toggle" then PickPlat_Enabled = value
     elseif name == "pick_plat_world" then StoragePlatWorld = tostring(value)
