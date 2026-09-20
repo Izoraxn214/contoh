@@ -12,6 +12,7 @@ local config = {
     drop_world         = pref:get("drop_world",         ""),
     drop_door          = pref:get("drop_door",          ""),
     drop_item_id       = pref:get("drop_item_id",       0),
+    min_drop_amt       = pref:get("min_drop_amt",       20),
     drop_x             = pref:get("drop_x",             0),
     drop_y             = pref:get("drop_y",             0),
     marker_id          = pref:get("marker_id",           1422),
@@ -21,13 +22,17 @@ local config = {
     enable_jitter      = pref:get("enable_jitter",      false),
     show_punch         = pref:get("show_punch",         true),
     
+    -- CONFIG DELAY & FEATURE BARU
     delay_place        = pref:get("delay_place",        120),
     delay_punch        = pref:get("delay_punch",        140),
     delay_harvest      = pref:get("delay_harvest",      180),
     delay_plant        = pref:get("delay_plant",        120),
+    enable_safe_delay  = pref:get("enable_safe_delay",  true),
+    enable_smart_delay = pref:get("enable_smart_delay", true),
+    enable_anti_miss   = pref:get("enable_anti_miss",   true),
 
     pnb_timeout        = 4000,
-    pnb_retry          = 4,
+    pnb_retry          = 3,
 }
 
 local seed_id            = 0
@@ -74,12 +79,27 @@ local function isThreadActive(my_id)
     return running and not reconnecting and (thread_instance == my_id)
 end
 
-local function ActionSleep(ms)
-    local jitter = 0
-    if config.enable_jitter then
-        jitter = math.random(10, 50)
+-- LOGIKA SAFE & SMART DELAY IMPLEMENTATION
+local function ActionSleep(base_ms)
+    local ms = base_ms
+
+    -- Safe Delay: Batasi minimal delay tidak boleh di bawah 100ms agar aman dari autoban
+    if config.enable_safe_delay and ms < 100 then
+        ms = 100
     end
-    Sleep(ms + jitter)
+
+    -- Smart Delay: Tambahkan jeda mikro acak sesuai respon ritme server
+    if config.enable_smart_delay then
+        ms = ms + math.random(15, 65)
+        action_count = action_count + 1
+        if action_count % math.random(15, 25) == 0 then
+            ms = ms + math.random(100, 300)
+        end
+    elseif config.enable_jitter then
+        ms = ms + math.random(10, 40)
+    end
+
+    Sleep(ms)
 end
 
 local function getPlayer()
@@ -202,7 +222,7 @@ end
 
 local function walkTo(tx, ty)
     FindPath(tx, ty)
-    ActionSleep(300)
+    ActionSleep(250)
     local cx, cy = getPlayerTile()
     if cx and cy then
         return (math.abs(cx - tx) <= 2 and math.abs(cy - ty) <= 2)
@@ -297,6 +317,7 @@ local function getPlantableTiles()
     return result
 end
 
+-- IMPLEMENTASI ANTI MISS PADA PLANT
 local function doPlant(my_id)
     if invCount(seed_id) < config.low_trigger then return end
 
@@ -310,12 +331,30 @@ local function doPlant(my_id)
         local tile = safeGetTile(t.x, t.y)
         if tile and tile.fg == 0 then
             if walkTo(t.x, t.y) then
-                placeBlock(t.x, t.y, seed_id, true)
+                local retry = 0
+                while retry < config.pnb_retry do
+                    if not isThreadActive(my_id) then return end
+                    placeBlock(t.x, t.y, seed_id, true)
+
+                    -- Anti Miss Check: Jika toggle aktif, pastikan ubin terisi seed (fg == seed_id)
+                    if config.enable_anti_miss then
+                        local check_tile = safeGetTile(t.x, t.y)
+                        if check_tile and check_tile.fg == seed_id then
+                            break -- Berhasil terkonfirmasi oleh server
+                        else
+                            retry = retry + 1
+                            ActionSleep(100) -- Re-try jika miss
+                        end
+                    else
+                        break
+                    end
+                end
             end
         end
     end
 end
 
+-- IMPLEMENTASI ANTI MISS PADA HARVEST
 local function doHarvestLoop(my_id)
     local ready_tiles = getReadyHarvestTiles()
     if #ready_tiles == 0 then return end
@@ -328,8 +367,24 @@ local function doHarvestLoop(my_id)
         if tile and tile.fg == seed_id and tile.readyharvest == true then
             local reached = walkTo(t.x, t.y)
             if reached then
-                punchTile(t.x, t.y)
-                ActionSleep(config.delay_harvest)
+                local retry = 0
+                while retry < config.pnb_retry do
+                    if not isThreadActive(my_id) then return end
+                    punchTile(t.x, t.y)
+
+                    -- Anti Miss Check: Pastikan pohon sudah hancur (fg == 0)
+                    if config.enable_anti_miss then
+                        local check_tile = safeGetTile(t.x, t.y)
+                        if check_tile and check_tile.fg == 0 then
+                            break
+                        else
+                            retry = retry + 1
+                            ActionSleep(100)
+                        end
+                    else
+                        break
+                    end
+                end
                 collectNearby()
             end
         end
@@ -338,12 +393,16 @@ end
 
 local function doDrop(my_id)
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
-    local total_item = invCount(target_item)
+    local total_item  = invCount(target_item)
     
-    local keep_amount = math.floor(total_item / 2)
+    local keep_amount    = math.floor(total_item / 2)
     local amount_to_drop = total_item - keep_amount
 
-    if amount_to_drop <= 0 then return end
+    if amount_to_drop < config.min_drop_amt then
+        Log("Jumlah item yang akan di-drop (" .. amount_to_drop .. ") kurang dari minimal (" .. config.min_drop_amt .. "). Batal warp storage.")
+        return
+    end
+
     if amount_to_drop > 200 then
         amount_to_drop = 200
     end
@@ -458,12 +517,10 @@ local function doPnb(my_id)
     end
 end
 
--- EKSEKUSI ALUR UTAMA SESUAI DIAGRAM USER
 local function processCurrentWorld(my_id)
     while isThreadActive(my_id) do
         if not checkAntiPlayer(my_id) then return false end
 
-        -- Cek Drop Trigger jika stok item simpanan melebihi High Trigger
         local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
         if invCount(target_item) >= config.high_trigger then
             doDrop(my_id)
@@ -474,34 +531,28 @@ local function processCurrentWorld(my_id)
         local plant_tiles = getPlantableTiles()
         local current_blocks = invCount(config.block_id)
 
-        -- [DIAGRAM BOX 2]: Cek apakah world ada tanaman siap panen / ubin bisa ditanam / stok block untuk PnB
         if #ready_tiles == 0 and (#plant_tiles == 0 or invCount(seed_id) < config.low_trigger) and current_blocks < config.high_trigger then
             Log("World ini sudah bersih (tidak ada tanaman/lahan/block PnB). Pindah world!")
-            return true -- Return true artinya siap pindah ke nextFarmWorld()
+            return true
         end
 
-        -- [DIAGRAM BOX 3]: Player akan meng-harvest jika ada pohon matang & block belum penuh
         if #ready_tiles > 0 and current_blocks < config.high_trigger then
             doHarvestLoop(my_id)
             if not isThreadActive(my_id) then return false end
         end
 
-        -- Update jumlah block terbaru setelah panen
         current_blocks = invCount(config.block_id)
 
-        -- [DIAGRAM BOX 4]: Player melakukan PNB jika block sudah memenuhi kriteria (>= High Trigger)
         if current_blocks >= config.high_trigger then
             doPnb(my_id)
             if not isThreadActive(my_id) then return false end
         end
 
-        -- [DIAGRAM BOX 5]: Player melakukan Plant jika ada seed & lahan
         if invCount(seed_id) >= config.low_trigger then
             doPlant(my_id)
             if not isThreadActive(my_id) then return false end
         end
 
-        -- [DIAGRAM LOOP]: Otomatis kembali mengecek status ubin di world yang sama
         Sleep(200)
     end
     return false
@@ -562,16 +613,13 @@ local function mainLoop(my_id)
         checkWorkRestCycle(my_id)
         if not checkAntiPlayer(my_id) then break end
 
-        -- 1. [DIAGRAM BOX 1]: Warp ke world farm urutan aktif
         local target_farm = getCurrentFarmWorld()
         local ok_farm = warpToWorld(target_farm, config.farm_door, my_id)
 
         if ok_farm then
-            -- 2. Jalankan alur siklus perulangan internal di world ini (Box 2 -> Box 3 -> Box 4 -> Box 5)
             local finished_world = processCurrentWorld(my_id)
             if not isThreadActive(my_id) then break end
 
-            -- 3. Jika world sudah bersih total, pindah ke world urutan berikutnya
             if finished_world then
                 nextFarmWorld()
             end
@@ -599,10 +647,13 @@ ui:addChildInputInt(dialog_main.menu,    "Low Trigger",   config.low_trigger,  "
 ui:addDivider()
 
 local dialog_delay = ui:addDialog("Delay & Speed Settings", "Pengaturan kecepatan aksi (dalam ms)", {})
-ui:addChildInputInt(dialog_delay.menu, "Place Delay (ms)",   config.delay_place,   "ms", "Delay menaruh block (def: 120)", "Verified", "delay_place")
-ui:addChildInputInt(dialog_delay.menu, "Punch Delay (ms)",   config.delay_punch,   "ms", "Delay memukul ubin (def: 140)",  "Verified", "delay_punch")
-ui:addChildInputInt(dialog_delay.menu, "Harvest Delay (ms)", config.delay_harvest, "ms", "Delay memanen pohon (def: 180)", "Verified", "delay_harvest")
-ui:addChildInputInt(dialog_delay.menu, "Plant Delay (ms)",   config.delay_plant,   "ms", "Delay menanam seed (def: 120)",  "Verified", "delay_plant")
+ui:addChildInputInt(dialog_delay.menu, "Place Delay (ms)",   config.delay_place,        "ms", "Delay menaruh block (def: 120)", "Verified", "delay_place")
+ui:addChildInputInt(dialog_delay.menu, "Punch Delay (ms)",   config.delay_punch,        "ms", "Delay memukul ubin (def: 140)",  "Verified", "delay_punch")
+ui:addChildInputInt(dialog_delay.menu, "Harvest Delay (ms)", config.delay_harvest,      "ms", "Delay memanen pohon (def: 180)", "Verified", "delay_harvest")
+ui:addChildInputInt(dialog_delay.menu, "Plant Delay (ms)",   config.delay_plant,        "ms", "Delay menanam seed (def: 120)",  "Verified", "delay_plant")
+ui:addChildToggle(dialog_delay.menu,   "Safe Delay Guard",   config.enable_safe_delay,  "enable_safe_delay")
+ui:addChildToggle(dialog_delay.menu,   "Smart Delay",        config.enable_smart_delay, "enable_smart_delay")
+ui:addChildToggle(dialog_delay.menu,   "Anti Miss (Wait)",   config.enable_anti_miss,   "enable_anti_miss")
 
 ui:addDivider()
 
@@ -614,11 +665,12 @@ ui:addChildButton(dialog_pnb.menu, "Set dari posisi sekarang", "btn_pnb_set")
 ui:addDivider()
 
 local dialog_drop = ui:addDialog("Drop Config", "Posisi & World drop item", {})
-ui:addChildInputString(dialog_drop.menu, "Drop World",   config.drop_world,   "World", "World tempat drop (kosongkan jika sama)", "World",    "drop_world")
-ui:addChildInputString(dialog_drop.menu, "Drop Door",    config.drop_door,    "ID",     "ID door world drop",                      "World",    "drop_door")
-ui:addChildInputInt(dialog_drop.menu,    "Drop Item ID", config.drop_item_id, "ID",     "ID item yang di-drop (0 = otomatis seed)", "Verified", "drop_item_id")
-ui:addChildInputInt(dialog_drop.menu,    "Drop X",       config.drop_x,       "X",      "koordinat X drop",                        "Verified", "drop_x")
-ui:addChildInputInt(dialog_drop.menu,    "Drop Y",       config.drop_y,       "Y",      "koordinat Y drop",                        "Verified", "drop_y")
+ui:addChildInputString(dialog_drop.menu, "Drop World",      config.drop_world,   "World", "World tempat drop (kosongkan jika sama)", "World",    "drop_world")
+ui:addChildInputString(dialog_drop.menu, "Drop Door",       config.drop_door,    "ID",     "ID door world drop",                      "World",    "drop_door")
+ui:addChildInputInt(dialog_drop.menu,    "Drop Item ID",    config.drop_item_id, "ID",     "ID item yang di-drop (0 = otomatis seed)", "Verified", "drop_item_id")
+ui:addChildInputInt(dialog_drop.menu,    "Minimal Drop Amt", config.min_drop_amt,  "amt",    "Min item di-drop biar ga sia-sia (def:20)", "Verified", "min_drop_amt")
+ui:addChildInputInt(dialog_drop.menu,    "Drop X",          config.drop_x,       "X",      "koordinat X drop",                        "Verified", "drop_x")
+ui:addChildInputInt(dialog_drop.menu,    "Drop Y",          config.drop_y,       "Y",      "koordinat Y drop",                        "Verified", "drop_y")
 ui:addChildButton(dialog_drop.menu, "Set dari posisi sekarang", "btn_drop_set")
 
 ui:addDivider()
@@ -644,6 +696,7 @@ local temp = {
     drop_world         = config.drop_world,
     drop_door          = config.drop_door,
     drop_item_id       = tostring(config.drop_item_id),
+    min_drop_amt       = tostring(config.min_drop_amt),
     pnb_x              = tostring(config.pnb_x),
     pnb_y              = tostring(config.pnb_y),
     drop_x             = tostring(config.drop_x),
@@ -657,6 +710,9 @@ local temp = {
     delay_punch        = tostring(config.delay_punch),
     delay_harvest      = tostring(config.delay_harvest),
     delay_plant        = tostring(config.delay_plant),
+    enable_safe_delay  = config.enable_safe_delay,
+    enable_smart_delay = config.enable_smart_delay,
+    enable_anti_miss   = config.enable_anti_miss,
 }
 
 function OnDraw(d)
@@ -676,6 +732,7 @@ function OnValue(type, name, value)
     elseif name == "drop_world"         then temp.drop_world         = value
     elseif name == "drop_door"          then temp.drop_door          = value
     elseif name == "drop_item_id"       then temp.drop_item_id       = tostring(value)
+    elseif name == "min_drop_amt"       then temp.min_drop_amt       = tostring(value)
     elseif name == "pnb_x"              then temp.pnb_x              = tostring(value)
     elseif name == "pnb_y"              then temp.pnb_y              = tostring(value)
     elseif name == "drop_x"             then temp.drop_x             = tostring(value)
@@ -689,6 +746,9 @@ function OnValue(type, name, value)
     elseif name == "delay_punch"        then temp.delay_punch        = tostring(value)
     elseif name == "delay_harvest"      then temp.delay_harvest      = tostring(value)
     elseif name == "delay_plant"        then temp.delay_plant        = tostring(value)
+    elseif name == "enable_safe_delay"  then temp.enable_safe_delay  = value
+    elseif name == "enable_smart_delay" then temp.enable_smart_delay = value
+    elseif name == "enable_anti_miss"   then temp.enable_anti_miss   = value
 
     elseif name == "btn_pnb_set" then
         local p = getPlayer()
@@ -727,6 +787,7 @@ function OnValue(type, name, value)
         config.drop_world         = temp.drop_world
         config.drop_door          = temp.drop_door
         config.drop_item_id       = tonumber(temp.drop_item_id) or config.drop_item_id
+        config.min_drop_amt       = tonumber(temp.min_drop_amt) or config.min_drop_amt
         config.pnb_x              = tonumber(temp.pnb_x)        or config.pnb_x
         config.pnb_y              = tonumber(temp.pnb_y)        or config.pnb_y
         config.drop_x             = tonumber(temp.drop_x)       or config.drop_x
@@ -740,6 +801,9 @@ function OnValue(type, name, value)
         config.delay_punch        = tonumber(temp.delay_punch)  or config.delay_punch
         config.delay_harvest      = tonumber(temp.delay_harvest) or config.delay_harvest
         config.delay_plant        = tonumber(temp.delay_plant)  or config.delay_plant
+        config.enable_safe_delay  = temp.enable_safe_delay
+        config.enable_smart_delay = temp.enable_smart_delay
+        config.enable_anti_miss   = temp.enable_anti_miss
 
         seed_id = config.block_id + 1
 
@@ -751,6 +815,7 @@ function OnValue(type, name, value)
         pref:set("drop_world",         config.drop_world)
         pref:set("drop_door",          config.drop_door)
         pref:set("drop_item_id",       config.drop_item_id)
+        pref:set("min_drop_amt",       config.min_drop_amt)
         pref:set("pnb_x",              config.pnb_x)
         pref:set("pnb_y",              config.pnb_y)
         pref:set("drop_x",             config.drop_x)
@@ -764,9 +829,12 @@ function OnValue(type, name, value)
         pref:set("delay_punch",        config.delay_punch)
         pref:set("delay_harvest",      config.delay_harvest)
         pref:set("delay_plant",        config.delay_plant)
+        pref:set("enable_safe_delay",  config.enable_safe_delay)
+        pref:set("enable_smart_delay", config.enable_smart_delay)
+        pref:set("enable_anti_miss",   config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Config & Drop Item tersimpan!")
+        growtopia.notify("Config & Proteksi Delay tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
