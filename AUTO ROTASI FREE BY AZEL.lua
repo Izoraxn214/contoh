@@ -31,6 +31,10 @@ local action_count       = 0
 local thread_instance    = 0
 local session_start_time = 0
 
+-- Multi-World State
+local farm_world_list    = {}
+local current_farm_index = 1
+
 local function Log(msg)
     LogToConsole("`5[LoliStore] `0" .. tostring(msg))
 end
@@ -45,6 +49,33 @@ local function sendWebhook(msg)
             body    = payload
         })
     end)
+end
+
+-- Helper memecah string koma "WORLD1,WORLD2,WORLD3"
+local function parseWorldList(raw_str)
+    local result = {}
+    if not raw_str or raw_str == "" then return result end
+    for w in string.gmatch(raw_str, "([^,%s]+)") do
+        table.insert(result, w)
+    end
+    return result
+end
+
+local function getCurrentFarmWorld()
+    if #farm_world_list == 0 then return "" end
+    if current_farm_index > #farm_world_list then
+        current_farm_index = 1
+    end
+    return farm_world_list[current_farm_index] or ""
+end
+
+local function nextFarmWorld()
+    if #farm_world_list <= 1 then return end
+    current_farm_index = current_farm_index + 1
+    if current_farm_index > #farm_world_list then
+        current_farm_index = 1
+    end
+    Log("Rotasi berpindah ke World Farm berikutnya: " .. getCurrentFarmWorld())
 end
 
 local function isThreadActive(my_id)
@@ -215,6 +246,35 @@ local function walkTo(tx, ty)
     return false
 end
 
+local function warpToWorld(target_world, door_id, my_id)
+    if not target_world or target_world == "" then return false end
+    local current_w = safeGetWorldName()
+    if current_w and string.upper(current_w) == string.upper(target_world) then
+        return true
+    end
+
+    Log("Warp ke World: " .. target_world)
+    local warp_str = target_world
+    if door_id and door_id ~= "" then
+        warp_str = warp_str .. "|" .. door_id
+    end
+
+    growtopia.warpTo(warp_str)
+
+    local elapsed = 0
+    while elapsed < 15000 do
+        if not isThreadActive(my_id) then return false end
+        local w = safeGetWorldName()
+        if w and string.upper(w) == string.upper(target_world) then
+            rSleep(1500, 2500)
+            return true
+        end
+        Sleep(1000)
+        elapsed = elapsed + 1000
+    end
+    return false
+end
+
 local function collectNearby(radius_px)
     radius_px = radius_px or 96
     local p = getPlayer()
@@ -247,20 +307,6 @@ local function hasDropOnTile(tx, ty)
             local oy = math.floor((obj.posY + 16) / 32)
             if math.abs(ox - tx) <= 1 and oy == ty then return true end
         end
-    end
-    return false
-end
-
-local function waitTileClear(tx, ty, timeout_ms, my_id)
-    local elapsed = 0
-    local step = math.random(200, 300)
-    while elapsed < timeout_ms do
-        if not isThreadActive(my_id) then return true end
-        if not hasDropOnTile(tx, ty) then return true end
-        collectNearby()
-        Sleep(step)
-        elapsed = elapsed + step
-        step = math.random(200, 300)
     end
     return false
 end
@@ -375,32 +421,18 @@ local function doDrop(my_id)
         amount = 200
     end
 
-    local current_w = safeGetWorldName()
-    local target_drop_world = (config.drop_world and config.drop_world ~= "") and config.drop_world or current_w
-    local is_different_world = (target_drop_world ~= "") and (string.upper(target_drop_world) ~= string.upper(current_w or ""))
+    local target_drop_world = (config.drop_world and config.drop_world ~= "") and config.drop_world or getCurrentFarmWorld()
 
-    if is_different_world then
-        Log("Warp ke world drop: " .. target_drop_world)
-        local warp_target = target_drop_world
-        if config.drop_door and config.drop_door ~= "" then
-            warp_target = warp_target .. "|" .. config.drop_door
-        end
-        
-        growtopia.warpTo(warp_target)
-        
-        local elapsed = 0
-        while elapsed < 15000 do
-            if not isThreadActive(my_id) then return end
-            local w = safeGetWorldName()
-            if w and string.upper(w) == string.upper(target_drop_world) then break end
-            Sleep(1000)
-            elapsed = elapsed + 1000
-        end
-        rSleep(1500, 2500)
+    -- 1. Warp ke World Storage Drop
+    local ok_drop_warp = warpToWorld(target_drop_world, config.drop_door, my_id)
+    if not ok_drop_warp then
+        Log("Gagal warp ke Storage World! Batal drop seed demi keamanan.")
+        return
     end
 
     if not isThreadActive(my_id) then return end
 
+    -- 2. Drop Seed (Shift X-1 jika penuh)
     local try_x = config.drop_x
     local try_y = config.drop_y
     local dropped = false
@@ -442,25 +474,8 @@ local function doDrop(my_id)
         Log("DROP gagal di semua titik percobaan!")
     end
 
-    if is_different_world then
-        Log("Warp balik ke world farm: " .. config.farm_world)
-        local back_target = config.farm_world
-        if config.farm_door and config.farm_door ~= "" then
-            back_target = back_target .. "|" .. config.farm_door
-        end
-
-        growtopia.warpTo(back_target)
-
-        local elapsed = 0
-        while elapsed < 15000 do
-            if not isThreadActive(my_id) then return end
-            local w = safeGetWorldName()
-            if w and string.upper(w) == string.upper(config.farm_world) then break end
-            Sleep(1000)
-            elapsed = elapsed + 1000
-        end
-        rSleep(1500, 2500)
-    end
+    -- 3. Warp Kembali ke Current Farm World
+    warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id)
 end
 
 local function doPTHT(my_id)
@@ -542,31 +557,13 @@ local function reconnectMonitor(my_id)
         if not p or not w then
             reconnecting = true
             sendWebhook("⚠️ **RECONNECTING:** Bot terputus dari server. Mencoba kembali ke world...")
-            local back_target = config.farm_world
-            if config.farm_door and config.farm_door ~= "" then
-                back_target = config.farm_world .. "|" .. config.farm_door
-            end
+            
             while running and (thread_instance == my_id) do
                 Sleep(math.random(1800, 2500))
-                if back_target and back_target ~= "" then
-                    growtopia.warpTo(back_target)
-                end
-                
-                local elapsed = 0
-                local ok = false
-                while elapsed < 15000 do
-                    local current_w = safeGetWorldName()
-                    if current_w and config.farm_world ~= "" and string.upper(current_w) == string.upper(config.farm_world) then
-                        ok = true
-                        break
-                    end
-                    Sleep(1000)
-                    elapsed = elapsed + 1000
-                end
-
+                local target_w = getCurrentFarmWorld()
+                local ok = warpToWorld(target_w, config.farm_door, my_id)
                 if ok then
-                    Sleep(math.random(1800, 2500))
-                    sendWebhook("✅ **RECONNECTED:** Berhasil masuk kembali ke world **" .. tostring(config.farm_world) .. "**.")
+                    sendWebhook("✅ **RECONNECTED:** Berhasil masuk kembali ke world **" .. tostring(target_w) .. "**.")
                     break
                 end
             end
@@ -591,68 +588,53 @@ local function mainLoop(my_id)
     action_count       = 0
     session_start_time = os.time()
 
-    -- PERBAIKAN: Auto-warp ke Farm World di awal Start jika player berada di world lain
-    local current_w = safeGetWorldName()
-    if config.farm_world and config.farm_world ~= "" then
-        if not current_w or string.upper(current_w) ~= string.upper(config.farm_world) then
-            Log("Mencoba warp awal ke Farm World: " .. config.farm_world)
-            local warp_target = config.farm_world
-            if config.farm_door and config.farm_door ~= "" then
-                warp_target = warp_target .. "|" .. config.farm_door
-            end
-            
-            growtopia.warpTo(warp_target)
-            
-            local elapsed = 0
-            while elapsed < 15000 do
-                if not isThreadActive(my_id) then return end
-                local w = safeGetWorldName()
-                if w and string.upper(w) == string.upper(config.farm_world) then break end
-                Sleep(1000)
-                elapsed = elapsed + 1000
-            end
-            rSleep(1500, 2500)
-        end
-    else
-        config.farm_world = current_w or ""
+    -- Inisialisasi World List
+    farm_world_list    = parseWorldList(config.farm_world)
+    current_farm_index = 1
+
+    if #farm_world_list == 0 then
+        local cw = safeGetWorldName()
+        if cw then table.insert(farm_world_list, cw) end
     end
 
-    Log("ROTASI MULAI!")
-    sendWebhook("🚀 **BOT STARTED:** Auto Rotasi diaktifkan di world **" .. tostring(config.farm_world) .. "**")
+    Log("ROTASI MULAI! Total Farm World: " .. #farm_world_list)
+    sendWebhook("🚀 **BOT STARTED:** Auto Rotasi diaktifkan (" .. #farm_world_list .. " World Farm).")
 
     runThread(function() reconnectMonitor(my_id) end)
-
-    if invCount(config.block_id) >= config.high_trigger then
-        local pnb_result = doPnb(my_id)
-        if not isThreadActive(my_id) then return end
-        if pnb_result == "low_block" then
-            doPTHT(my_id)
-            if not isThreadActive(my_id) then return end
-        end
-    end
 
     while isThreadActive(my_id) do
         checkWorkRestCycle(my_id)
         if not checkAntiPlayer(my_id) then break end
 
-        local block_count = invCount(config.block_id)
+        -- 1. Masuk ke Farm World aktif saat ini
+        local target_farm = getCurrentFarmWorld()
+        local ok_farm = warpToWorld(target_farm, config.farm_door, my_id)
 
-        if block_count >= config.high_trigger then
-            local pnb_result = doPnb(my_id)
-            if not isThreadActive(my_id) then break end
+        if ok_farm then
+            local block_count = invCount(config.block_id)
 
-            if pnb_result == "low_block" then
+            if block_count >= config.high_trigger then
+                local pnb_result = doPnb(my_id)
+                if not isThreadActive(my_id) then break end
+
+                if pnb_result == "low_block" then
+                    doPTHT(my_id)
+                    if not isThreadActive(my_id) then break end
+                    nextFarmWorld() -- Selesai di world ini, ganti ke world berikutnya
+                else
+                    if invCount(seed_id) >= config.high_trigger then
+                        doDrop(my_id)
+                        if not isThreadActive(my_id) then break end
+                    end
+                end
+            else
                 doPTHT(my_id)
                 if not isThreadActive(my_id) then break end
-            else
-                if invCount(seed_id) >= config.high_trigger then
-                    doDrop(my_id)
-                    if not isThreadActive(my_id) then break end
-                end
+                nextFarmWorld() -- Selesai di world ini, ganti ke world berikutnya
             end
         else
-            doPTHT(my_id)
-            if not isThreadActive(my_id) then break end
+            Log("Gagal warp ke Farm World: " .. target_farm .. ", mencoba ke world berikutnya...")
+            nextFarmWorld()
         end
 
         rSleep(200, 400)
@@ -665,11 +647,11 @@ ui:addLabelApp("AUTO ROTASI BY LOLISTORE", "Ability")
 ui:addDivider()
 
 local dialog_main = ui:addDialog("Main Config", "Setting utama rotasi", {})
-ui:addChildInputString(dialog_main.menu, "Farm World",    config.farm_world,   "World", "Nama world farm utama",             "World",    "farm_world")
-ui:addChildInputString(dialog_main.menu, "Farm Door",     config.farm_door,    "ID",    "ID door world farm",               "World",    "farm_door")
-ui:addChildInputInt(dialog_main.menu,    "Block ID",      config.block_id,     "ID",    "ID block (bukan seed)",             "Verified", "block_id")
-ui:addChildInputInt(dialog_main.menu,    "High Trigger",  config.high_trigger, "amt",   "seed>=ini->Drop (def:180)",         "Verified", "high_trigger")
-ui:addChildInputInt(dialog_main.menu,    "Low Trigger",   config.low_trigger,  "amt",   "block/seed<=ini->stop (def:10)",    "Verified", "low_trigger")
+ui:addChildInputString(dialog_main.menu, "Farm World",    config.farm_world,   "World", "FARM1,FARM2,FARM3 (pisahkan koma)", "World",    "farm_world")
+ui:addChildInputString(dialog_main.menu, "Farm Door",     config.farm_door,    "ID",    "ID door universal world farm",       "World",    "farm_door")
+ui:addChildInputInt(dialog_main.menu,    "Block ID",      config.block_id,     "ID",    "ID block (bukan seed)",              "Verified", "block_id")
+ui:addChildInputInt(dialog_main.menu,    "High Trigger",  config.high_trigger, "amt",   "seed>=ini->Drop (def:180)",          "Verified", "high_trigger")
+ui:addChildInputInt(dialog_main.menu,    "Low Trigger",   config.low_trigger,  "amt",   "block/seed<=ini->stop (def:10)",     "Verified", "low_trigger")
 
 ui:addDivider()
 
