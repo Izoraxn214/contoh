@@ -11,6 +11,7 @@ local config = {
     farm_door          = pref:get("farm_door",          ""),
     drop_world         = pref:get("drop_world",         ""),
     drop_door          = pref:get("drop_door",          ""),
+    drop_item_id       = pref:get("drop_item_id",       0),
     drop_x             = pref:get("drop_x",             0),
     drop_y             = pref:get("drop_y",             0),
     marker_id          = pref:get("marker_id",           1422),
@@ -336,18 +337,22 @@ local function doHarvestLoop(my_id)
 end
 
 local function doDrop(my_id)
-    local amount = invCount(seed_id)
-    if amount <= 0 then return end
+    local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
+    local total_item = invCount(target_item)
+    
+    local keep_amount = math.floor(total_item / 2)
+    local amount_to_drop = total_item - keep_amount
 
-    if amount > 200 then
-        amount = 200
+    if amount_to_drop <= 0 then return end
+    if amount_to_drop > 200 then
+        amount_to_drop = 200
     end
 
     local target_drop_world = (config.drop_world and config.drop_world ~= "") and config.drop_world or getCurrentFarmWorld()
 
     local ok_drop_warp = warpToWorld(target_drop_world, config.drop_door, my_id)
     if not ok_drop_warp then
-        Log("Gagal warp ke Storage World! Batal drop seed demi keamanan.")
+        Log("Gagal warp ke Storage World! Batal drop item demi keamanan.")
         return
     end
 
@@ -365,15 +370,15 @@ local function doDrop(my_id)
         walkTo(try_x, try_y)
         Sleep(300)
 
-        local before_count = invCount(seed_id)
-        sendPacket(2, "action|drop\nitemID|" .. seed_id .. "\n")
+        local before_count = invCount(target_item)
+        sendPacket(2, "action|drop\nitemID|" .. target_item .. "\n")
         Sleep(200)
-        sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. seed_id .. "|\ncount|" .. amount .. "\n")
+        sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. target_item .. "|\ncount|" .. amount_to_drop .. "\n")
         Sleep(300)
 
-        if invCount(seed_id) < before_count then
+        if invCount(target_item) < before_count then
             dropped = true
-            Log("DROP berhasil di X=" .. try_x .. ", Y=" .. try_y .. " (" .. amount + 0 .. " seed)")
+            Log("DROP berhasil di X=" .. try_x .. ", Y=" .. try_y .. " (" .. amount_to_drop .. " item, menyisakan " .. invCount(target_item) .. ")")
             
             if try_x ~= config.drop_x then
                 config.drop_x = try_x
@@ -394,50 +399,6 @@ local function doDrop(my_id)
     end
 
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id)
-end
-
--- LOGIKA BARU: PTHT Terus Menerus Sampai World Bersih
-local function doPTHT(my_id)
-    Log("START PTHT (Membersihkan world dari tanaman & panenan...)")
-
-    while isThreadActive(my_id) do
-        if not checkAntiPlayer(my_id) then return end
-
-        if invCount(seed_id) >= config.high_trigger then
-            doDrop(my_id)
-            if not isThreadActive(my_id) then return end
-        end
-
-        local plant_tiles = getPlantableTiles()
-        local ready_tiles = getReadyHarvestTiles()
-
-        -- Jika tidak ada lagi yang bisa ditanam DAN tidak ada lagi yang matang, selesai di world ini!
-        if #plant_tiles == 0 and #ready_tiles == 0 then
-            Log("World ini sudah bersih total dari PTHT.")
-            break
-        end
-
-        local action_performed = false
-
-        if #plant_tiles > 0 and invCount(seed_id) >= config.low_trigger then
-            doPlant(my_id)
-            action_performed = true
-            if not isThreadActive(my_id) then return end
-        end
-
-        if #ready_tiles > 0 and invCount(config.block_id) < config.high_trigger then
-            doHarvestLoop(my_id)
-            action_performed = true
-            if not isThreadActive(my_id) then return end
-        end
-
-        -- Jika dalam satu siklus tidak ada aksi yang bisa dilakukan (misal kekurangan item/seed), keluar loop
-        if not action_performed then
-            break
-        end
-
-        Sleep(200)
-    end
 end
 
 local function getPnbTargets(cx, cy)
@@ -497,6 +458,55 @@ local function doPnb(my_id)
     end
 end
 
+-- EKSEKUSI ALUR UTAMA SESUAI DIAGRAM USER
+local function processCurrentWorld(my_id)
+    while isThreadActive(my_id) do
+        if not checkAntiPlayer(my_id) then return false end
+
+        -- Cek Drop Trigger jika stok item simpanan melebihi High Trigger
+        local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
+        if invCount(target_item) >= config.high_trigger then
+            doDrop(my_id)
+            if not isThreadActive(my_id) then return false end
+        end
+
+        local ready_tiles = getReadyHarvestTiles()
+        local plant_tiles = getPlantableTiles()
+        local current_blocks = invCount(config.block_id)
+
+        -- [DIAGRAM BOX 2]: Cek apakah world ada tanaman siap panen / ubin bisa ditanam / stok block untuk PnB
+        if #ready_tiles == 0 and (#plant_tiles == 0 or invCount(seed_id) < config.low_trigger) and current_blocks < config.high_trigger then
+            Log("World ini sudah bersih (tidak ada tanaman/lahan/block PnB). Pindah world!")
+            return true -- Return true artinya siap pindah ke nextFarmWorld()
+        end
+
+        -- [DIAGRAM BOX 3]: Player akan meng-harvest jika ada pohon matang & block belum penuh
+        if #ready_tiles > 0 and current_blocks < config.high_trigger then
+            doHarvestLoop(my_id)
+            if not isThreadActive(my_id) then return false end
+        end
+
+        -- Update jumlah block terbaru setelah panen
+        current_blocks = invCount(config.block_id)
+
+        -- [DIAGRAM BOX 4]: Player melakukan PNB jika block sudah memenuhi kriteria (>= High Trigger)
+        if current_blocks >= config.high_trigger then
+            doPnb(my_id)
+            if not isThreadActive(my_id) then return false end
+        end
+
+        -- [DIAGRAM BOX 5]: Player melakukan Plant jika ada seed & lahan
+        if invCount(seed_id) >= config.low_trigger then
+            doPlant(my_id)
+            if not isThreadActive(my_id) then return false end
+        end
+
+        -- [DIAGRAM LOOP]: Otomatis kembali mengecek status ubin di world yang sama
+        Sleep(200)
+    end
+    return false
+end
+
 local function reconnectMonitor(my_id)
     while running and (thread_instance == my_id) do
         Sleep(3000)
@@ -552,30 +562,17 @@ local function mainLoop(my_id)
         checkWorkRestCycle(my_id)
         if not checkAntiPlayer(my_id) then break end
 
+        -- 1. [DIAGRAM BOX 1]: Warp ke world farm urutan aktif
         local target_farm = getCurrentFarmWorld()
         local ok_farm = warpToWorld(target_farm, config.farm_door, my_id)
 
         if ok_farm then
-            local block_count = invCount(config.block_id)
+            -- 2. Jalankan alur siklus perulangan internal di world ini (Box 2 -> Box 3 -> Box 4 -> Box 5)
+            local finished_world = processCurrentWorld(my_id)
+            if not isThreadActive(my_id) then break end
 
-            if block_count >= config.high_trigger then
-                local pnb_result = doPnb(my_id)
-                if not isThreadActive(my_id) then break end
-
-                if pnb_result == "low_block" then
-                    doPTHT(my_id)
-                    if not isThreadActive(my_id) then break end
-                    nextFarmWorld()
-                else
-                    if invCount(seed_id) >= config.high_trigger then
-                        doDrop(my_id)
-                        if not isThreadActive(my_id) then break end
-                    end
-                end
-            else
-                -- Jalankan PTHT berulang sampai world benar-benar bersih, baru pindah world
-                doPTHT(my_id)
-                if not isThreadActive(my_id) then break end
+            -- 3. Jika world sudah bersih total, pindah ke world urutan berikutnya
+            if finished_world then
                 nextFarmWorld()
             end
         else
@@ -596,7 +593,7 @@ local dialog_main = ui:addDialog("Main Config", "Setting utama rotasi", {})
 ui:addChildInputString(dialog_main.menu, "Farm World",    config.farm_world,   "World", "FARM1,FARM2,FARM3 (pisahkan koma)", "World",    "farm_world")
 ui:addChildInputString(dialog_main.menu, "Farm Door",     config.farm_door,    "ID",    "ID door universal world farm",       "World",    "farm_door")
 ui:addChildInputInt(dialog_main.menu,    "Block ID",      config.block_id,     "ID",    "ID block (bukan seed)",              "Verified", "block_id")
-ui:addChildInputInt(dialog_main.menu,    "High Trigger",  config.high_trigger, "amt",   "seed>=ini->Drop (def:180)",          "Verified", "high_trigger")
+ui:addChildInputInt(dialog_main.menu,    "High Trigger",  config.high_trigger, "amt",   "item>=ini->Drop (def:180)",          "Verified", "high_trigger")
 ui:addChildInputInt(dialog_main.menu,    "Low Trigger",   config.low_trigger,  "amt",   "block/seed<=ini->stop (def:10)",     "Verified", "low_trigger")
 
 ui:addDivider()
@@ -616,11 +613,12 @@ ui:addChildButton(dialog_pnb.menu, "Set dari posisi sekarang", "btn_pnb_set")
 
 ui:addDivider()
 
-local dialog_drop = ui:addDialog("Drop Config", "Posisi & World drop seed", {})
-ui:addChildInputString(dialog_drop.menu, "Drop World", config.drop_world, "World", "World tempat drop (kosongkan jika sama)", "World", "drop_world")
-ui:addChildInputString(dialog_drop.menu, "Drop Door",  config.drop_door,  "ID",    "ID door world drop",                      "World", "drop_door")
-ui:addChildInputInt(dialog_drop.menu,    "Drop X",     config.drop_x,     "X",     "koordinat X drop",                        "Verified", "drop_x")
-ui:addChildInputInt(dialog_drop.menu,    "Drop Y",     config.drop_y,     "Y",     "koordinat Y drop",                        "Verified", "drop_y")
+local dialog_drop = ui:addDialog("Drop Config", "Posisi & World drop item", {})
+ui:addChildInputString(dialog_drop.menu, "Drop World",   config.drop_world,   "World", "World tempat drop (kosongkan jika sama)", "World",    "drop_world")
+ui:addChildInputString(dialog_drop.menu, "Drop Door",    config.drop_door,    "ID",     "ID door world drop",                      "World",    "drop_door")
+ui:addChildInputInt(dialog_drop.menu,    "Drop Item ID", config.drop_item_id, "ID",     "ID item yang di-drop (0 = otomatis seed)", "Verified", "drop_item_id")
+ui:addChildInputInt(dialog_drop.menu,    "Drop X",       config.drop_x,       "X",      "koordinat X drop",                        "Verified", "drop_x")
+ui:addChildInputInt(dialog_drop.menu,    "Drop Y",       config.drop_y,       "Y",      "koordinat Y drop",                        "Verified", "drop_y")
 ui:addChildButton(dialog_drop.menu, "Set dari posisi sekarang", "btn_drop_set")
 
 ui:addDivider()
@@ -645,6 +643,7 @@ local temp = {
     farm_door          = config.farm_door,
     drop_world         = config.drop_world,
     drop_door          = config.drop_door,
+    drop_item_id       = tostring(config.drop_item_id),
     pnb_x              = tostring(config.pnb_x),
     pnb_y              = tostring(config.pnb_y),
     drop_x             = tostring(config.drop_x),
@@ -676,6 +675,7 @@ function OnValue(type, name, value)
     elseif name == "farm_door"          then temp.farm_door          = value
     elseif name == "drop_world"         then temp.drop_world         = value
     elseif name == "drop_door"          then temp.drop_door          = value
+    elseif name == "drop_item_id"       then temp.drop_item_id       = tostring(value)
     elseif name == "pnb_x"              then temp.pnb_x              = tostring(value)
     elseif name == "pnb_y"              then temp.pnb_y              = tostring(value)
     elseif name == "drop_x"             then temp.drop_x             = tostring(value)
@@ -726,6 +726,7 @@ function OnValue(type, name, value)
         config.farm_door          = temp.farm_door
         config.drop_world         = temp.drop_world
         config.drop_door          = temp.drop_door
+        config.drop_item_id       = tonumber(temp.drop_item_id) or config.drop_item_id
         config.pnb_x              = tonumber(temp.pnb_x)        or config.pnb_x
         config.pnb_y              = tonumber(temp.pnb_y)        or config.pnb_y
         config.drop_x             = tonumber(temp.drop_x)       or config.drop_x
@@ -749,6 +750,7 @@ function OnValue(type, name, value)
         pref:set("farm_door",          config.farm_door)
         pref:set("drop_world",         config.drop_world)
         pref:set("drop_door",          config.drop_door)
+        pref:set("drop_item_id",       config.drop_item_id)
         pref:set("pnb_x",              config.pnb_x)
         pref:set("pnb_y",              config.pnb_y)
         pref:set("drop_x",             config.drop_x)
@@ -764,7 +766,7 @@ function OnValue(type, name, value)
         pref:set("delay_plant",        config.delay_plant)
         pref:save()
 
-        growtopia.notify("Config & Delay tersimpan!")
+        growtopia.notify("Config & Drop Item tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
