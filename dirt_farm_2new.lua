@@ -1,24 +1,185 @@
 -- ==========================================
--- GLOBAL STATE VARIABLES (FULL CONTROLLED BY MGUI)
+-- SET CONFIG TERPUSAT (UBAH SETELAN DI SINI)
 -- ==========================================
-WorldList = {"TKTYW", "QVSVF", "FCMQW", "DEJCA", "ACMFA", "FZSGR", "KWYRY", "DWTWG", "JZUXA", "TUIGE", "JTLQM", "IMCKM", "DQKQU", "FUQRB", "WZWGW"}
-index_world = 1
-nameworld = WorldList[index_world]
+Config = {
+    -- Target World Dirt Farm
+    WorldList = {"TKTYW", "QVSVF", "FCMQW", "DEJCA", "ACMFA", "FZSGR", "KWYRY", "DWTWG", "JZUXA", "TUIGE", "JTLQM", "IMCKM", "DQKQU", "FUQRB", "WZWGW"},
+    DFWorldDoor = "IWP2145",
 
-worldsaveseed = "PLATSAVEHAM"
-worldsaveseedDoor = "12345"
+    -- World Storage Seed & Restock
+    WorldSaveSeed = "PLATSAVEHAM",
+    WorldSaveSeedDoor = "12345",
 
-dpc = 120 -- Delay Place (ms)
-dbk = 220 -- Delay Break (ms)
+    -- Setelan Auto Drop
+    AutoDropEnabled = true,
+    DropWorld = "PLATSAVEHAM",
+    DropDoor = "12345",
+    DropCooldown = 20, -- Jeda antar drop (detik)
+    KeepPercent = 0.50, -- MENYISAKAN 50% UNTUK SEMUA ITEM DI BACKPACK SAAT DROP
 
-PlatformID = 1324
-StoragePlatWorld = "PLATSAVEHAM"
-StoragePlatDoor = "12345"
-PickPlat_Enabled = true
+    -- Slot Drop Items (8 Slots)
+    ItemSlots = {
+        { id = 3,  min = 190, x = 98, y = 22 }, -- Seed Dirt
+        { id = 2,  min = 190, x = 98, y = 23 }, -- Dirt Block
+        { id = 15, min = 190, x = 98, y = 21 }, -- Seed Cave
+        { id = 14, min = 50,  x = 98, y = 20 }, -- Cave Block
+        { id = 11, min = 190, x = 98, y = 19 }, -- Seed Rock
+        { id = 10, min = 50,  x = 98, y = 18 }, -- Rock Block
+        { id = 5,  min = 190, x = 98, y = 17 }, -- Seed Lava
+        { id = 4,  min = 50,  x = 98, y = 16 }  -- Lava Block
+    },
 
-WorldLockID = 242
-EntranceID = 5036
+    -- Speed & Delay Execution (ms)
+    DelayPlace = 120,
+    DelayBreak = 220,
+    HitCount = 1,
+    VerifyPunch = false,
+    EnableBreak = true,
+    EnablePlace = true,
 
+    -- Platform & Storage Settings
+    PlatformID = 1324,
+    StoragePlatWorld = "PLATSAVEHAM",
+    StoragePlatDoor = "12345",
+    PickPlat_Enabled = true,
+
+    -- World Lock & Door Entrance
+    WorldLockID = 242,
+    EntranceID = 5036,
+
+    -- Auto Pick Door
+    PickDoor_Enabled = true,
+    PickDoor_World = "PLATSAVEHAM",
+    PickDoor_Door = "12345",
+    PickDoor_ID = 5036,
+
+    -- Auto Pick WL
+    PickWL_Enabled = true,
+    PickWL_World = "PLATSAVEHAM",
+    PickWL_Door = "12345",
+    PickWL_ID = 242,
+
+    -- Random World Feature
+    UseRandomDF = false,
+    RandLength = 5,
+    RandWithNumber = false,
+
+    -- Global Auto Pick
+    AutoPickEnabled = true,
+    AutoFind_Enabled = true
+}
+
+local CONFIG_FILE = "df_config_save.txt"
+
+-- ==========================================
+-- FUNGSI SAVE & LOAD CONFIG DARI HP (PERSISTENT)
+-- ==========================================
+function saveConfigToStorage()
+    local lines = {}
+    for k, v in pairs(Config) do
+        if type(v) ~= "table" then
+            table.insert(lines, k .. "=" .. tostring(v))
+        end
+    end
+    if Config.WorldList then
+        table.insert(lines, "WorldList=" .. table.concat(Config.WorldList, ","))
+    end
+
+    local dataStr = table.concat(lines, "\n")
+    local ok, err = pcall(writeToLocal, CONFIG_FILE, dataStr)
+    if ok then
+        LogToConsole("`w[`2Config Saved`w] Setelan berhasil disimpan ke memori HP!")
+    else
+        LogToConsole("`4[`0Config Error`4] Gagal menyimpan file config!")
+    end
+end
+
+function loadConfigFromStorage()
+    local ok, content = pcall(readFromLocal, CONFIG_FILE)
+    if ok and content and content ~= "" then
+        for line in content:gmatch("[^\r\n]+") do
+            local k, v = line:match("^([^=]+)=(.*)$")
+            if k and v then
+                if k == "WorldList" then
+                    local list = {}
+                    for w in v:gmatch("[^,%s]+") do table.insert(list, w) end
+                    if #list > 0 then Config.WorldList = list end
+                else
+                    if v == "true" then v = true
+                    elseif v == "false" then v = false
+                    elseif tonumber(v) then v = tonumber(v)
+                    end
+                    Config[k] = v
+                end
+            end
+        end
+        LogToConsole("`w[`2Config Loaded`w] Berhasil memuat setelan dari simpanan HP!")
+        return true
+    end
+    return false
+end
+
+-- ==========================================
+-- SINKRONISASI CONFIG KE GLOBAL VARIABLES
+-- ==========================================
+function applyConfig()
+    WorldList = Config.WorldList
+    index_world = 1
+    nameworld = WorldList[index_world]
+
+    worldsaveseed = Config.WorldSaveSeed
+    worldsaveseedDoor = Config.WorldSaveSeedDoor
+    DFWorldDoor = Config.DFWorldDoor
+
+    dpc = Config.DelayPlace
+    dbk = Config.DelayBreak
+    HitCount = Config.HitCount
+    VerifyPunch = Config.VerifyPunch
+    EnableBreak = Config.EnableBreak
+    EnablePlace = Config.EnablePlace
+
+    PlatformID = Config.PlatformID
+    StoragePlatWorld = Config.StoragePlatWorld
+    StoragePlatDoor = Config.StoragePlatDoor
+    PickPlat_Enabled = Config.PickPlat_Enabled
+
+    WorldLockID = Config.WorldLockID
+    EntranceID = Config.EntranceID
+
+    AutoDropEnabled = Config.AutoDropEnabled
+    DropWorld = Config.DropWorld
+    DropDoor = Config.DropDoor
+    DropCooldown = Config.DropCooldown
+    KeepPercent = Config.KeepPercent or 0.50
+    ItemSlots = Config.ItemSlots
+
+    PickDoor_Enabled = Config.PickDoor_Enabled
+    PickDoor_World = Config.PickDoor_World
+    PickDoor_Door = Config.PickDoor_Door
+    PickDoor_ID = Config.PickDoor_ID
+
+    PickWL_Enabled = Config.PickWL_Enabled
+    PickWL_World = Config.PickWL_World
+    PickWL_Door = Config.PickWL_Door
+    PickWL_ID = Config.PickWL_ID
+
+    UseRandomDF = Config.UseRandomDF
+    RandLength = Config.RandLength
+    RandWithNumber = Config.RandWithNumber
+
+    AutoPickEnabled = Config.AutoPickEnabled
+    AutoFind_Enabled = Config.AutoFind_Enabled
+    
+    saveConfigToStorage()
+end
+
+-- BACA CONFIG LOKAL & APLIKASIKAN
+loadConfigFromStorage()
+applyConfig()
+
+-- ==========================================
+-- SYSTEM TOGGLES & INTERNAL STATES
+-- ==========================================
 EditToggle("Antibounce", true)
 EditToggle("ModFly", true)
 EditToggle("Antilag", true)
@@ -28,53 +189,9 @@ EditToggle("Cant Pickup Item", true)
 EditToggle("Anti Lava", true)
 
 autoDF_running = false
-
-EnableBreak = true
-EnablePlace = true
-HitCount = 1
-VerifyPunch = false
-
-DFWorldDoor = "IWP2145"
-
--- LOGIKA AUTO DROP & COOLDOWN ANTI SHADOWBAN (IDEAL 20 DETIK)
-AutoDropEnabled = true
 lastDropTime = 0
-DropCooldown = 20 -- Cooldown ideal 20 detik (Paling Aman & Pas)
-
-DropWorld = "PLATSAVEHAM"
-DropDoor = "12345"
-
--- KOORDINAT TERBARU (X = 98)
-ItemSlots = {
-    { id = 3,  min = 190, x = 98, y = 22 }, -- Seed Dirt
-    { id = 2,  min = 190, x = 98, y = 23 }, -- Dirt Block
-    { id = 15, min = 190, x = 98, y = 21 }, -- Seed Cave
-    { id = 14, min = 50,  x = 98, y = 20 }, -- Cave Block
-    { id = 11, min = 190, x = 98, y = 19 }, -- Seed Rock
-    { id = 10, min = 50,  x = 98, y = 18 }, -- Rock Block
-    { id = 5,  min = 190, x = 98, y = 17 }, -- Seed Lava
-    { id = 4,  min = 50,  x = 98, y = 16 }  -- Lava Block
-}
-
 botStartTime = os.time()
 worldStartTime = os.time()
-
-AutoPickEnabled = true
-AutoFind_Enabled = true
-
-PickDoor_Enabled = true
-PickDoor_World = "PLATSAVEHAM"
-PickDoor_Door = "12345"
-PickDoor_ID = 5036
-
-PickWL_Enabled = true
-PickWL_World = "PLATSAVEHAM"
-PickWL_Door = "12345"
-PickWL_ID = 242
-
-UseRandomDF = false
-RandLength = 5
-RandWithNumber = false
 
 math.randomseed(os.time())
 
@@ -87,7 +204,6 @@ local function isUnbreakable(fg)
     local dynamicWLID = tonumber(PickWL_ID) or 242
     local dynamicPlatID = tonumber(PlatformID) or 1324
 
-    -- 1. Proteksi Unbreakable Standar, Door, WL, dan Platform dari mGUI
     if id == 8 or id == 6 or id == dynamicWLID or id == 202 or id == 204 or id == 206 
         or id == 2408 or id == 4994 or id == 1790 
         or id == dynamicDoorID or id == tonumber(EntranceID)
@@ -95,7 +211,6 @@ local function isUnbreakable(fg)
         return true
     end
 
-    -- 2. Daftar Blok DF Standar (Hanya 5 blok ini yang boleh dihancurkan)
     local clearableDFBlocks = {
         [2]  = true, -- Dirt Block
         [3]  = true, -- Dirt Tree
@@ -104,7 +219,6 @@ local function isUnbreakable(fg)
         [14] = true  -- Cave Dirt
     }
 
-    -- Semua item/seed/farmable lain otomatis diproteksi!
     if not clearableDFBlocks[id] then
         return true
     end
@@ -532,7 +646,7 @@ function setupNewRandomWorld()
     return true
 end
 
--- LOGIKA AUTO DROP DENGAN FITUR GESER KOORDINAT DYNAMIC (X - 1) & HUMAN RECOVERY DELAY
+-- LOGIKA AUTO DROP DENGAN MENYISAKAN 50% UNTUK SEMUA ITEM
 function processAutoDropAndTrash()
     if not autoDF_running or not AutoDropEnabled then return end
 
@@ -551,13 +665,13 @@ function processAutoDropAndTrash()
             local jml = inv(slot.id)
             if jml >= slot.min and DropWorld ~= "" then
                 
-                local dropAmount = jml
-                if slot.id == 2 then
-                    dropAmount = jml - 50
-                end
+                -- MENYISAKAN 50% UNTUK SEMUA ITEM DI BACKPACK
+                local ratio = KeepPercent or 0.50
+                local keepAmount = math.floor(jml * ratio)
+                local dropAmount = jml - keepAmount
 
                 if dropAmount > 0 then
-                    LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Pindah ke Storage: " .. DropWorld)
+                    LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Dropping 50% (" .. dropAmount .. " pcs, sisa " .. keepAmount .. " di tas) ke Storage: " .. DropWorld)
                     
                     warp(DropWorld, DropDoor)
                     Sleep(7000)
@@ -568,7 +682,6 @@ function processAutoDropAndTrash()
                     local dropSuccess = false
                     local attempts = 0
 
-                    -- LOOPING PENCARIAN UBIN KOSONG KETIKA PENUH
                     while autoDF_running and not dropSuccess and attempts < 10 and targetX >= 1 do
                         walkTo(targetX, targetY, 2000)
                         Sleep(800)
@@ -582,17 +695,15 @@ function processAutoDropAndTrash()
 
                         local countAfter = inv(slot.id)
 
-                        -- VERIFIKASI: Jika stok backpack berkurang, berarti DROP BERHASIL!
                         if countAfter < countBefore then
                             dropSuccess = true
-                            slot.x = targetX -- AUTO-SAVE KOORDINAT BARU YANG BERHASIL
-                            LogToConsole("`w[`2Auto Drop Success`w] Berhasil drop di X=" .. targetX .. " Y=" .. targetY)
+                            slot.x = targetX
+                            LogToConsole("`w[`2Auto Drop Success`w] Berhasil drop di X=" .. targetX .. " Y=" .. targetY .. " (Sisa " .. inv(slot.id) .. " pcs di tas)")
                         else
-                            -- Jika stok TIDAK berkurang (Drop Penuh), beri jeda recovery humanis lalu geser 1 ubin ke kiri
                             LogToConsole("`4[`0Drop Full`4] X=" .. targetX .. " Y=" .. targetY .. " penuh/gagal! Menunggu jeda aman & geser ke X=" .. (targetX - 1))
                             targetX = targetX - 1
                             attempts = attempts + 1
-                            Sleep(1200) -- JEDA RECOVERY HUMANIS UNTUK CEGAH SHADOWBAN
+                            Sleep(1200)
                         end
                     end
 
@@ -1016,14 +1127,12 @@ function plcDrt_2()
             end
 
             if hasEmptyTile then
-                -- Restock Dirt dulu jika kosong sebelum jalan jauh
                 if inv(2) == 0 and autoDF_running then
                     plntDf_122()
                     Sleep(300)
                 end
 
                 local standY = tiley + 1
-                -- Hancurkan penghalang di titik berdiri jika ada
                 if safeTile(tilex, standY).fg ~= 0 and not isUnbreakable(safeTile(tilex, standY).fg) then
                     tnjk1_3(tilex, standY)
                     Sleep(dbk)
@@ -1137,8 +1246,10 @@ function clearLeftoverSafe()
     end
 end
 
--- AUDIT BAWAH SAMPAI ATAS (FULL WORLD)
+-- AUDIT BAWAH SAMPAI ATAS (FULL WORLD) DENGAN JEDA SINKRONISASI 2 DETIK
 function isWorldAlreadyDone()
+    Sleep(2000)
+
     if not waitForTilesToLoad() then
         LogToConsole("`4[`0Warning`4] Tile world belum ter-load sempurna! Memulai pengerjaan...")
         return false
@@ -1185,7 +1296,7 @@ end
 
 function verifyAndPatchWorld()
     if not autoDF_running then return true end
-    LogToConsole("`w[`0Audit Akhir`w] Memeriksa ulang seluruh world sebelum pindah...")
+    LogToConsole("`w[`0Audit Akhir`w] Memeriksa ulang seluruh world (Bawah s.d Atas)...")
     
     local retryLimit = 1
     local currentRetry = 0
@@ -1197,8 +1308,14 @@ function verifyAndPatchWorld()
         end
         
         currentRetry = currentRetry + 1
-        LogToConsole("`4[`0Penambalan`4] Masih ada ubin bolong/pohon tertanam! Memulai perbaikan otomatis...")
+        LogToConsole("`4[`0Penambalan`4] Masih ada ubin bolong/sisa di world! Memulai pembersihan & penambalan ulang...")
         
+        clrd_down_15()
+        if not autoDF_running then return false end
+
+        brkLv_12()
+        if not autoDF_running then return false end
+
         clearLeftoverSafe()
         if not autoDF_running then return false end
 
@@ -1414,6 +1531,14 @@ local module_json = [[
             "type": "divider"
         },
         {
+            "type": "button",
+            "text": "Apply Config (Save Setelan)",
+            "alias": "btn_apply_config"
+        },
+        {
+            "type": "divider"
+        },
+        {
             "type": "dialog",
             "text": "Autofarm Setting",
             "support_text": "Settings for autofarm",
@@ -1422,35 +1547,35 @@ local module_json = [[
                 {
                     "type": "input_string",
                     "text": "List World",
-                    "default": "TKTYW,QVSVF,FCMQW,DEJCA,ACMFA,FZSGR,KWYRY,DWTWG,JZUXA,TUIGE,JTLQM,IMCKM,DQKQU,FUQRB,WZWGW",
+                    "default": "]] .. table.concat(Config.WorldList, ",") .. [[",
                     "icon": "Edit",
                     "alias": "autodf_worldlist"
                 },
                 {
                     "type": "input_string",
                     "text": "List World Door ID (Opsional)",
-                    "default": "IWP2145",
+                    "default": "]] .. Config.DFWorldDoor .. [[",
                     "icon": "Edit",
                     "alias": "autodf_worlddoor"
                 },
                 {
                     "type": "input_string",
                     "text": "World Save Seed (WORLD)",
-                    "default": "PLATSAVEHAM",
+                    "default": "]] .. Config.WorldSaveSeed .. [[",
                     "icon": "Edit",
                     "alias": "autodf_worldsaveseed"
                 },
                 {
                     "type": "input_string",
                     "text": "World Save Seed Door ID",
-                    "default": "12345",
+                    "default": "]] .. Config.WorldSaveSeedDoor .. [[",
                     "icon": "Edit",
                     "alias": "autodf_worldsaveseed_door"
                 },
                 {
                     "type": "toggle",
                     "text": "Random World (Auto DF)",
-                    "default": false,
+                    "default": ]] .. tostring(Config.UseRandomDF) .. [[,
                     "alias": "autodf_use_random"
                 },
                 {
@@ -1458,13 +1583,13 @@ local module_json = [[
                     "text": "Random Length",
                     "min": 1,
                     "max": 12,
-                    "default": 5,
+                    "default": ]] .. Config.RandLength .. [[,
                     "alias": "rand_length"
                 },
                 {
                     "type": "toggle",
                     "text": "With Number (Angka)",
-                    "default": false,
+                    "default": ]] .. tostring(Config.RandWithNumber) .. [[,
                     "alias": "rand_with_number"
                 },
                 {
@@ -1473,19 +1598,19 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Verify before punch",
-                    "default": false,
+                    "default": ]] .. tostring(Config.VerifyPunch) .. [[,
                     "alias": "verify_punch"
                 },
                 {
                     "type": "toggle",
                     "text": "Break",
-                    "default": true,
+                    "default": ]] .. tostring(Config.EnableBreak) .. [[,
                     "alias": "enable_break"
                 },
                 {
                     "type": "toggle",
                     "text": "Place",
-                    "default": true,
+                    "default": ]] .. tostring(Config.EnablePlace) .. [[,
                     "alias": "enable_place"
                 },
                 {
@@ -1493,13 +1618,13 @@ local module_json = [[
                     "text": "Hit Count",
                     "min": 1,
                     "max": 40,
-                    "default": 1,
+                    "default": ]] .. Config.HitCount .. [[,
                     "alias": "hit_count"
                 },
                 {
                     "type": "input_int",
                     "text": "Delay Break",
-                    "default": "220",
+                    "default": "]] .. Config.DelayBreak .. [[",
                     "label": "ms",
                     "placeholder": "millisecond",
                     "icon": "Verified",
@@ -1508,7 +1633,7 @@ local module_json = [[
                 {
                     "type": "input_int",
                     "text": "Delay Place",
-                    "default": "120",
+                    "default": "]] .. Config.DelayPlace .. [[",
                     "label": "ms",
                     "placeholder": "millisecond",
                     "icon": "Verified",
@@ -1540,78 +1665,78 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Drop Item",
-                    "default": true,
+                    "default": ]] .. tostring(Config.AutoDropEnabled) .. [[,
                     "alias": "autodrop_toggle"
                 },
                 {
                     "type": "input_string",
                     "text": "World Drop Item",
-                    "default": "PLATSAVEHAM",
+                    "default": "]] .. Config.DropWorld .. [[",
                     "icon": "Edit",
                     "alias": "drop_world"
                 },
                 {
                     "type": "input_string",
                     "text": "Door",
-                    "default": "12345",
+                    "default": "]] .. Config.DropDoor .. [[",
                     "icon": "Edit",
                     "alias": "drop_door"
                 },
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 1 (Seed Dirt) ---" },
-                { "type": "input_int", "text": "ID Item 1", "default": "3", "alias": "item1_id" },
-                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item1_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item1_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "22", "alias": "item1_y" },
+                { "type": "input_int", "text": "ID Item 1", "default": "]] .. Config.ItemSlots[1].id .. [[", "alias": "item1_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "]] .. Config.ItemSlots[1].min .. [[", "alias": "item1_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "]] .. Config.ItemSlots[1].x .. [[", "alias": "item1_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "]] .. Config.ItemSlots[1].y .. [[", "alias": "item1_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 2 (Dirt Block) ---" },
-                { "type": "input_int", "text": "ID Item 2", "default": "2", "alias": "item2_id" },
-                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item2_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item2_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "23", "alias": "item2_y" },
+                { "type": "input_int", "text": "ID Item 2", "default": "]] .. Config.ItemSlots[2].id .. [[", "alias": "item2_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "]] .. Config.ItemSlots[2].min .. [[", "alias": "item2_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "]] .. Config.ItemSlots[2].x .. [[", "alias": "item2_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "]] .. Config.ItemSlots[2].y .. [[", "alias": "item2_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 3 (Seed Cave) ---" },
-                { "type": "input_int", "text": "ID Item 3", "default": "15", "alias": "item3_id" },
-                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item3_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item3_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "21", "alias": "item3_y" },
+                { "type": "input_int", "text": "ID Item 3", "default": "]] .. Config.ItemSlots[3].id .. [[", "alias": "item3_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "]] .. Config.ItemSlots[3].min .. [[", "alias": "item3_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "]] .. Config.ItemSlots[3].x .. [[", "alias": "item3_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "]] .. Config.ItemSlots[3].y .. [[", "alias": "item3_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 4 (Cave Block) ---" },
-                { "type": "input_int", "text": "ID Item 4", "default": "14", "alias": "item4_id" },
-                { "type": "input_int", "text": "Minimal Drop", "default": "50", "alias": "item4_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item4_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "20", "alias": "item4_y" },
+                { "type": "input_int", "text": "ID Item 4", "default": "]] .. Config.ItemSlots[4].id .. [[", "alias": "item4_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "]] .. Config.ItemSlots[4].min .. [[", "alias": "item4_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "]] .. Config.ItemSlots[4].x .. [[", "alias": "item4_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "]] .. Config.ItemSlots[4].y .. [[", "alias": "item4_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 5 (Seed Rock) ---" },
-                { "type": "input_int", "text": "ID Item 5", "default": "11", "alias": "item5_id" },
-                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item5_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item5_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "19", "alias": "item5_y" },
+                { "type": "input_int", "text": "ID Item 5", "default": "]] .. Config.ItemSlots[5].id .. [[", "alias": "item5_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "]] .. Config.ItemSlots[5].min .. [[", "alias": "item5_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "]] .. Config.ItemSlots[5].x .. [[", "alias": "item5_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "]] .. Config.ItemSlots[5].y .. [[", "alias": "item5_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 6 (Rock Block) ---" },
-                { "type": "input_int", "text": "ID Item 6", "default": "10", "alias": "item6_id" },
-                { "type": "input_int", "text": "Minimal Drop", "default": "50", "alias": "item6_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item6_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "18", "alias": "item6_y" },
+                { "type": "input_int", "text": "ID Item 6", "default": "]] .. Config.ItemSlots[6].id .. [[", "alias": "item6_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "]] .. Config.ItemSlots[6].min .. [[", "alias": "item6_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "]] .. Config.ItemSlots[6].x .. [[", "alias": "item6_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "]] .. Config.ItemSlots[6].y .. [[", "alias": "item6_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 7 (Seed Lava) ---" },
-                { "type": "input_int", "text": "ID Item 7", "default": "5", "alias": "item7_id" },
-                { "type": "input_int", "text": "Minimal Drop", "default": "190", "alias": "item7_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item7_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "17", "alias": "item7_y" },
+                { "type": "input_int", "text": "ID Item 7", "default": "]] .. Config.ItemSlots[7].id .. [[", "alias": "item7_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "]] .. Config.ItemSlots[7].min .. [[", "alias": "item7_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "]] .. Config.ItemSlots[7].x .. [[", "alias": "item7_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "]] .. Config.ItemSlots[7].y .. [[", "alias": "item7_y" },
 
                 { "type": "divider" },
                 { "type": "labelapp", "icon": "Verified", "text": "--- ITEM 8 (Lava Block) ---" },
-                { "type": "input_int", "text": "ID Item 8", "default": "4", "alias": "item8_id" },
-                { "type": "input_int", "text": "Minimal Drop", "default": "50", "alias": "item8_min" },
-                { "type": "input_int", "text": "Koordinat X", "default": "98", "alias": "item8_x" },
-                { "type": "input_int", "text": "Koordinat Y", "default": "16", "alias": "item8_y" }
+                { "type": "input_int", "text": "ID Item 8", "default": "]] .. Config.ItemSlots[8].id .. [[", "alias": "item8_id" },
+                { "type": "input_int", "text": "Minimal Drop", "default": "]] .. Config.ItemSlots[8].min .. [[", "alias": "item8_min" },
+                { "type": "input_int", "text": "Koordinat X", "default": "]] .. Config.ItemSlots[8].x .. [[", "alias": "item8_x" },
+                { "type": "input_int", "text": "Koordinat Y", "default": "]] .. Config.ItemSlots[8].y .. [[", "alias": "item8_y" }
             ]
         },
         {
@@ -1626,13 +1751,13 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Auto pick (Global)",
-                    "default": true,
+                    "default": ]] .. tostring(Config.AutoPickEnabled) .. [[,
                     "alias": "autopick_toggle"
                 },
                 {
                     "type": "toggle",
                     "text": "Mode: Auto find",
-                    "default": true,
+                    "default": ]] .. tostring(Config.AutoFind_Enabled) .. [[,
                     "alias": "autofind_toggle"
                 },
                 {
@@ -1641,27 +1766,27 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Pick Door Entrance",
-                    "default": true,
+                    "default": ]] .. tostring(Config.PickDoor_Enabled) .. [[,
                     "alias": "pick_door_toggle"
                 },
                 {
                     "type": "input_string",
                     "text": "Door World Name",
-                    "default": "PLATSAVEHAM",
+                    "default": "]] .. Config.PickDoor_World .. [[",
                     "icon": "Edit",
                     "alias": "pick_door_world"
                 },
                 {
                     "type": "input_string",
                     "text": "Door ID / Door Name",
-                    "default": "12345",
+                    "default": "]] .. Config.PickDoor_Door .. [[",
                     "icon": "Edit",
                     "alias": "pick_door_doorid"
                 },
                 {
                     "type": "input_int",
                     "text": "Door Item ID",
-                    "default": "5036",
+                    "default": "]] .. Config.PickDoor_ID .. [[",
                     "label": "ID",
                     "placeholder": "Item ID",
                     "icon": "Verified",
@@ -1673,27 +1798,27 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Pick World Lock",
-                    "default": true,
+                    "default": ]] .. tostring(Config.PickWL_Enabled) .. [[,
                     "alias": "pick_wl_toggle"
                 },
                 {
                     "type": "input_string",
                     "text": "WL World Name",
-                    "default": "PLATSAVEHAM",
+                    "default": "]] .. Config.PickWL_World .. [[",
                     "icon": "Edit",
                     "alias": "pick_wl_world"
                 },
                 {
                     "type": "input_string",
                     "text": "WL Door ID",
-                    "default": "12345",
+                    "default": "]] .. Config.PickWL_Door .. [[",
                     "icon": "Edit",
                     "alias": "pick_wl_doorid"
                 },
                 {
                     "type": "input_int",
                     "text": "WL Item ID",
-                    "default": "242",
+                    "default": "]] .. Config.PickWL_ID .. [[",
                     "label": "ID",
                     "placeholder": "Item ID",
                     "icon": "Verified",
@@ -1705,27 +1830,27 @@ local module_json = [[
                 {
                     "type": "toggle",
                     "text": "Pick Platform",
-                    "default": true,
+                    "default": ]] .. tostring(Config.PickPlat_Enabled) .. [[,
                     "alias": "pick_plat_toggle"
                 },
                 {
                     "type": "input_string",
                     "text": "Plat World Name",
-                    "default": "PLATSAVEHAM",
+                    "default": "]] .. Config.StoragePlatWorld .. [[",
                     "icon": "Edit",
                     "alias": "pick_plat_world"
                 },
                 {
                     "type": "input_string",
                     "text": "Plat Door ID",
-                    "default": "12345",
+                    "default": "]] .. Config.StoragePlatDoor .. [[",
                     "icon": "Edit",
                     "alias": "pick_plat_doorid"
                 },
                 {
                     "type": "input_int",
                     "text": "Plat Item ID",
-                    "default": "1324",
+                    "default": "]] .. Config.PlatformID .. [[",
                     "label": "ID",
                     "placeholder": "Item ID",
                     "icon": "Verified",
@@ -1752,21 +1877,26 @@ function onValue(type_evt, name, value)
         local worlds = {}
         for w in tostring(value):gmatch("[^,%s]+") do table.insert(worlds, w) end
         if #worlds > 0 then 
+            Config.WorldList = worlds
             WorldList = worlds 
             if index_world > #WorldList then index_world = 1 end
         end
-    elseif name == "autodf_worlddoor" then DFWorldDoor = tostring(value)
-    elseif name == "autodf_worldsaveseed" then worldsaveseed = tostring(value)
-    elseif name == "autodf_worldsaveseed_door" then worldsaveseedDoor = tostring(value)
-    elseif name == "autodf_use_random" then UseRandomDF = value
-    elseif name == "rand_length" then RandLength = math.floor(tonumber(value) or 5)
-    elseif name == "rand_with_number" then RandWithNumber = value
-    elseif name == "verify_punch" then VerifyPunch = value
-    elseif name == "enable_break" then EnableBreak = value
-    elseif name == "enable_place" then EnablePlace = value
-    elseif name == "hit_count" then HitCount = math.floor(tonumber(value) or 1)
-    elseif name == "autodf_delaybreak" then dbk = math.floor(tonumber(value) or dbk)
-    elseif name == "autodf_delayplace" then dpc = math.floor(tonumber(value) or dpc)
+    elseif name == "autodf_worlddoor" then Config.DFWorldDoor = tostring(value); DFWorldDoor = Config.DFWorldDoor
+    elseif name == "autodf_worldsaveseed" then Config.WorldSaveSeed = tostring(value); worldsaveseed = Config.WorldSaveSeed
+    elseif name == "autodf_worldsaveseed_door" then Config.WorldSaveSeedDoor = tostring(value); worldsaveseedDoor = Config.WorldSaveSeedDoor
+    elseif name == "autodf_use_random" then Config.UseRandomDF = value; UseRandomDF = value
+    elseif name == "rand_length" then Config.RandLength = math.floor(tonumber(value) or 5); RandLength = Config.RandLength
+    elseif name == "rand_with_number" then Config.RandWithNumber = value; RandWithNumber = value
+    elseif name == "verify_punch" then Config.VerifyPunch = value; VerifyPunch = value
+    elseif name == "enable_break" then Config.EnableBreak = value; EnableBreak = value
+    elseif name == "enable_place" then Config.EnablePlace = value; EnablePlace = value
+    elseif name == "hit_count" then Config.HitCount = math.floor(tonumber(value) or 1); HitCount = Config.HitCount
+    elseif name == "autodf_delaybreak" then Config.DelayBreak = math.floor(tonumber(value) or dbk); dbk = Config.DelayBreak
+    elseif name == "autodf_delayplace" then Config.DelayPlace = math.floor(tonumber(value) or dpc); dpc = Config.DelayPlace
+
+    elseif name == "btn_apply_config" then
+        applyConfig()
+        LogToConsole("`w[`2SUCCESS`w] Config berhasil disimpan & diterapkan!")
 
     elseif name == "toggle_pos_check" then
         if value then
@@ -1781,42 +1911,45 @@ function onValue(type_evt, name, value)
             end
         end
 
-    elseif name == "autodrop_toggle" then AutoDropEnabled = value
-    elseif name == "drop_world" then DropWorld = tostring(value)
-    elseif name == "drop_door" then DropDoor = tostring(value)
+    elseif name == "autodrop_toggle" then Config.AutoDropEnabled = value; AutoDropEnabled = value
+    elseif name == "drop_world" then Config.DropWorld = tostring(value); DropWorld = Config.DropWorld
+    elseif name == "drop_door" then Config.DropDoor = tostring(value); DropDoor = Config.DropDoor
 
     elseif name:find("^item(%d+)_([%w_]+)$") then
         local idxStr, prop = name:match("^item(%d+)_([%w_]+)$")
         local idx = tonumber(idxStr)
         if idx and idx >= 1 and idx <= 8 then
-            if prop == "id" then ItemSlots[idx].id = math.floor(tonumber(value) or 0)
-            elseif prop == "min" then ItemSlots[idx].min = math.floor(tonumber(value) or 0)
-            elseif prop == "x" then ItemSlots[idx].x = math.floor(tonumber(value) or 0)
-            elseif prop == "y" then ItemSlots[idx].y = math.floor(tonumber(value) or 0)
+            if prop == "id" then Config.ItemSlots[idx].id = math.floor(tonumber(value) or 0)
+            elseif prop == "min" then Config.ItemSlots[idx].min = math.floor(tonumber(value) or 0)
+            elseif prop == "x" then Config.ItemSlots[idx].x = math.floor(tonumber(value) or 0)
+            elseif prop == "y" then Config.ItemSlots[idx].y = math.floor(tonumber(value) or 0)
             end
+            ItemSlots = Config.ItemSlots
         end
 
-    elseif name == "autopick_toggle" then AutoPickEnabled = value
-    elseif name == "autofind_toggle" then AutoFind_Enabled = value
+    elseif name == "autopick_toggle" then Config.AutoPickEnabled = value; AutoPickEnabled = value
+    elseif name == "autofind_toggle" then Config.AutoFind_Enabled = value; AutoFind_Enabled = value
     
-    elseif name == "pick_door_toggle" then PickDoor_Enabled = value
-    elseif name == "pick_door_world" then PickDoor_World = tostring(value)
-    elseif name == "pick_door_doorid" then PickDoor_Door = tostring(value)
+    elseif name == "pick_door_toggle" then Config.PickDoor_Enabled = value; PickDoor_Enabled = value
+    elseif name == "pick_door_world" then Config.PickDoor_World = tostring(value); PickDoor_World = Config.PickDoor_World
+    elseif name == "pick_door_doorid" then Config.PickDoor_Door = tostring(value); PickDoor_Door = Config.PickDoor_Door
     elseif name == "pick_door_id" then 
-        PickDoor_ID = math.floor(tonumber(value) or 5036)
+        Config.PickDoor_ID = math.floor(tonumber(value) or 5036)
+        PickDoor_ID = Config.PickDoor_ID
         EntranceID = PickDoor_ID
     
-    elseif name == "pick_wl_toggle" then PickWL_Enabled = value
-    elseif name == "pick_wl_world" then PickWL_World = tostring(value)
-    elseif name == "pick_wl_doorid" then PickWL_Door = tostring(value)
+    elseif name == "pick_wl_toggle" then Config.PickWL_Enabled = value; PickWL_Enabled = value
+    elseif name == "pick_wl_world" then Config.PickWL_World = tostring(value); PickWL_World = Config.PickWL_World
+    elseif name == "pick_wl_doorid" then Config.PickWL_Door = tostring(value); PickWL_Door = Config.PickWL_Door
     elseif name == "pick_wl_id" then 
-        PickWL_ID = math.floor(tonumber(value) or 242)
+        Config.PickWL_ID = math.floor(tonumber(value) or 242)
+        PickWL_ID = Config.PickWL_ID
         WorldLockID = PickWL_ID
     
-    elseif name == "pick_plat_toggle" then PickPlat_Enabled = value
-    elseif name == "pick_plat_world" then StoragePlatWorld = tostring(value)
-    elseif name == "pick_plat_doorid" then StoragePlatDoor = tostring(value)
-    elseif name == "pick_plat_id" then PlatformID = math.floor(tonumber(value) or 1324)
+    elseif name == "pick_plat_toggle" then Config.PickPlat_Enabled = value; PickPlat_Enabled = value
+    elseif name == "pick_plat_world" then Config.StoragePlatWorld = tostring(value); StoragePlatWorld = Config.StoragePlatWorld
+    elseif name == "pick_plat_doorid" then Config.StoragePlatDoor = tostring(value); StoragePlatDoor = Config.StoragePlatDoor
+    elseif name == "pick_plat_id" then Config.PlatformID = math.floor(tonumber(value) or 1324); PlatformID = Config.PlatformID
     
     elseif name == "btn_itemfinder" then openItemFinderDialog()
     
@@ -1824,7 +1957,7 @@ function onValue(type_evt, name, value)
         autoDF_running = value
         if value == true then
             botStartTime = os.time()
-            LogToConsole("`w[`0Auto DF`w] Konfigurasi aman & siap dikerjakan!")
+            LogToConsole("`w[`0Auto DF`w] Config terpasang & bot siap dikerjakan!")
         else
             StopAll()
         end
