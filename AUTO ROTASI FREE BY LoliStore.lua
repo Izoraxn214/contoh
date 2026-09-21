@@ -17,7 +17,8 @@ local config = {
     drop_y             = pref:get("drop_y",             0),
     marker_id          = pref:get("marker_id",           1422),
     enable_anti_player = pref:get("enable_anti_player", true),
-    enable_fly         = pref:get("enable_fly",         true), -- Mod Fly Toggle
+    anti_player_cd     = pref:get("anti_player_cd",     120),
+    enable_fly         = pref:get("enable_fly",         true),
     work_min           = pref:get("work_min",           45),
     rest_min           = pref:get("rest_min",           10),
     enable_jitter      = pref:get("enable_jitter",      false),
@@ -39,14 +40,42 @@ local seed_id            = 0
 local running            = false
 local reconnecting       = false
 local action_count       = 0
+local gc_counter         = 0
 local thread_instance    = 0
 local session_start_time = 0
+
+-- WATCHDOG & DYNAMIC TIMERS
+local last_action_time   = 0
+local current_work_sec   = 0
+local current_rest_sec   = 0
 
 local farm_world_list    = {}
 local current_farm_index = 1
 
 local function Log(msg)
-    LogToConsole("`5[LoliStore] `0" .. tostring(msg))
+    LogToConsole("`5[LoliStore 24/7] `0" .. tostring(msg))
+end
+
+local function updateActionTime()
+    last_action_time = os.time()
+    gc_counter = gc_counter + 1
+    if gc_counter >= 50 then
+        collectgarbage("collect")
+        gc_counter = 0
+    end
+end
+
+local function randomizeTimers()
+    -- Memberi variasi acak (-3 sampai +5 menit) pada jam kerja dan istirahat
+    local work_var = math.random(-3, 5)
+    local rest_var = math.random(-2, 3)
+
+    local final_work = math.max(10, config.work_min + work_var)
+    local final_rest = math.max(2, config.rest_min + rest_var)
+
+    current_work_sec = final_work * 60
+    current_rest_sec = final_rest * 60
+    Log("Siklus Kerja Baru: " .. final_work .. " min | Istirahat: " .. final_rest .. " min")
 end
 
 local function applyModFly()
@@ -129,6 +158,45 @@ local function safeGetPlayerList()
     return nil
 end
 
+local function safeGetWorldName()
+    local ok, w = pcall(GetWorldName)
+    if ok and w and w ~= "" and string.upper(w) ~= "EXIT" then return w end
+    return nil
+end
+
+local function warpToWorld(target_world, door_id, my_id, force)
+    if not target_world or target_world == "" then return false end
+    local current_w = safeGetWorldName()
+
+    if not force and current_w and string.upper(current_w) == string.upper(target_world) then
+        return true
+    end
+
+    local warp_str = target_world
+    if door_id and door_id ~= "" then
+        warp_str = warp_str .. "|" .. door_id
+    end
+
+    Log("Warp ke World: " .. warp_str)
+    growtopia.warpTo(warp_str)
+
+    local elapsed = 0
+    while elapsed < 15000 do
+        if not isThreadActive(my_id) then return false end
+        local w = safeGetWorldName()
+        if w and string.upper(w) == string.upper(target_world) then
+            Sleep(1000)
+            applyModFly()
+            collectgarbage("collect")
+            updateActionTime()
+            return true
+        end
+        Sleep(1000)
+        elapsed = elapsed + 1000
+    end
+    return false
+end
+
 local function checkAntiPlayer(my_id)
     if not config.enable_anti_player then return true end
     local players = safeGetPlayerList()
@@ -137,33 +205,59 @@ local function checkAntiPlayer(my_id)
 
     for _, p in pairs(players) do
         if p and p.netID and p.netID ~= local_p.netID then
-            Log("`4[DANGER] Player lain terdeteksi! Auto exit...")
+            Log("`4[DANGER] Player/Mod terdeteksi! Warp EXIT & Cooldown " .. config.anti_player_cd .. " detik...")
             growtopia.warpTo("EXIT")
-            running = false
+
+            local cd_elapsed = 0
+            while cd_elapsed < config.anti_player_cd do
+                if not isThreadActive(my_id) then return false end
+                Sleep(1000)
+                cd_elapsed = cd_elapsed + 1
+            end
+
+            Log("Cooldown selesai, kembali ke world kerja...")
+            warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
             return false
         end
     end
     return true
 end
 
+-- WORK-REST CYCLE HUMANIZED (DYNAMIC JITTER)
 local function checkWorkRestCycle(my_id)
     if config.work_min <= 0 or config.rest_min <= 0 then return end
     local elapsed_work = os.time() - session_start_time
-    if elapsed_work >= (config.work_min * 60) then
-        Log("Waktunya istirahat sejenak selama " .. config.rest_min .. " menit...")
-        
+
+    if elapsed_work >= current_work_sec then
+        Log("Waktunya istirahat AFK (Warp ke EXIT)...")
+        growtopia.warpTo("EXIT")
+
         local rest_elapsed = 0
-        local total_rest_sec = config.rest_min * 60
-        while rest_elapsed < total_rest_sec do
+        while rest_elapsed < current_rest_sec do
             if not running or (thread_instance ~= my_id) then return end
             Sleep(2000)
             if not reconnecting then
                 rest_elapsed = rest_elapsed + 2
             end
         end
-        
+
         session_start_time = os.time()
-        Log("Istirahat selesai, rotasi dilanjutkan!")
+        randomizeTimers() -- Acak durasi untuk siklus berikutnya
+        Log("Istirahat selesai! Kembali ke world farm...")
+        warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
+    end
+end
+
+-- WATCHDOG TIMER (ANTI-STUCK GUARD)
+local function checkWatchdog(my_id)
+    if last_action_time == 0 then return end
+    local idle_time = os.time() - last_action_time
+
+    -- Jika bot tidak melakukan aksi selama > 180 detik (3 menit), paksa re-warp
+    if idle_time >= 180 then
+        Log("`4[WATCHDOG] Bot terdeteksi stuck/freeze (" .. idle_time .. " detik)! Memaksa re-warp...")
+        last_action_time = os.time()
+        warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
     end
 end
 
@@ -195,12 +289,6 @@ local function safeGetObjects()
     return nil
 end
 
-local function safeGetWorldName()
-    local ok, w = pcall(GetWorldName)
-    if ok and w and w ~= "" and string.upper(w) ~= "EXIT" then return w end
-    return nil
-end
-
 local function punchTile(tx, ty)
     local p = getPlayer()
     if not p then return end
@@ -212,6 +300,7 @@ local function punchTile(tx, ty)
         px    = tx,
         py    = ty
     })
+    updateActionTime()
     ActionSleep(config.delay_punch)
 end
 
@@ -226,6 +315,7 @@ local function placeBlock(tx, ty, item_id, is_plant)
         px    = tx,
         py    = ty
     })
+    updateActionTime()
     ActionSleep(is_plant and config.delay_plant or config.delay_place)
 end
 
@@ -234,40 +324,10 @@ local function walkTo(tx, ty)
     ActionSleep(250)
     local cx, cy = getPlayerTile()
     if cx and cy then
-        return (math.abs(cx - tx) <= 2 and math.abs(cy - ty) <= 2)
-    end
-    return false
-end
-
--- LOGIKA WARP DENGAN FORCE ID DOOR
-local function warpToWorld(target_world, door_id, my_id, force)
-    if not target_world or target_world == "" then return false end
-    local current_w = safeGetWorldName()
-
-    -- Jika tidak di-force dan sudah di world yang sama, lewati warp
-    if not force and current_w and string.upper(current_w) == string.upper(target_world) then
-        return true
-    end
-
-    local warp_str = target_world
-    if door_id and door_id ~= "" then
-        warp_str = warp_str .. "|" .. door_id
-    end
-
-    Log("Warp ke World: " .. warp_str)
-    growtopia.warpTo(warp_str)
-
-    local elapsed = 0
-    while elapsed < 15000 do
-        if not isThreadActive(my_id) then return false end
-        local w = safeGetWorldName()
-        if w and string.upper(w) == string.upper(target_world) then
-            Sleep(1000)
-            applyModFly()
+        if (math.abs(cx - tx) <= 2 and math.abs(cy - ty) <= 2) then
+            updateActionTime()
             return true
         end
-        Sleep(1000)
-        elapsed = elapsed + 1000
     end
     return false
 end
@@ -418,7 +478,6 @@ local function doDrop(my_id)
 
     local target_drop_world = (config.drop_world and config.drop_world ~= "") and config.drop_world or getCurrentFarmWorld()
 
-    -- Warp ke storage world dengan ID door
     local ok_drop_warp = warpToWorld(target_drop_world, config.drop_door, my_id, true)
     if not ok_drop_warp then
         Log("Gagal warp ke Storage World! Batal drop item demi keamanan.")
@@ -447,6 +506,7 @@ local function doDrop(my_id)
 
         if invCount(target_item) < before_count then
             dropped = true
+            updateActionTime()
             Log("DROP berhasil di X=" .. try_x .. ", Y=" .. try_y .. " (" .. amount_to_drop .. " item, menyisakan " .. invCount(target_item) .. ")")
             
             if try_x ~= config.drop_x then
@@ -467,7 +527,6 @@ local function doDrop(my_id)
         Log("DROP gagal di semua titik percobaan!")
     end
 
-    -- KEMBALI WARP KE WORLD FARM AKTIF DENGAN FORCE DOOR ID
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
 end
 
@@ -532,6 +591,7 @@ local function processCurrentWorld(my_id)
     while isThreadActive(my_id) do
         if not checkAntiPlayer(my_id) then return false end
         applyModFly()
+        checkWatchdog(my_id)
 
         local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
         if invCount(target_item) >= config.high_trigger then
@@ -570,25 +630,43 @@ local function processCurrentWorld(my_id)
     return false
 end
 
+-- EXPONENTIAL BACKOFF RECONNECT MONITOR
 local function reconnectMonitor(my_id)
+    local retry_delay = 5000
     while running and (thread_instance == my_id) do
         Sleep(3000)
         local p = getPlayer()
         local w = safeGetWorldName()
         if not p or not w then
             reconnecting = true
-            Log("Mencoba reconnecting kembali ke world...")
+            Log("`4[DISCONNECT] Mencoba reconnecting ke world...")
             
             while running and (thread_instance == my_id) do
-                Sleep(2000)
+                Sleep(retry_delay)
                 local target_w = getCurrentFarmWorld()
                 local ok = warpToWorld(target_w, config.farm_door, my_id, true)
                 if ok then
                     Log("Berhasil reconnect ke world " .. tostring(target_w))
+                    retry_delay = 5000 -- Reset delay jika berhasil
                     break
+                else
+                    -- Tingkatkan delay bertahap hingga max 60 detik (Exponential Backoff)
+                    retry_delay = math.min(60000, retry_delay + 5000)
+                    Log("Gagal reconnect, mencoba lagi dalam " .. math.floor(retry_delay / 1000) .. " detik...")
                 end
             end
             reconnecting = false
+        end
+    end
+end
+
+-- SERVER & CONSOLE MESSAGE GUARD
+local function onConsoleMessage(msg)
+    if running and type(msg) == "string" then
+        local lower = string.lower(msg)
+        if string.find(lower, "mod") or string.find(lower, "suspended") or string.find(lower, "maintenance") then
+            Log("`4[ALERT CONSOLE] Pesan bahaya terdeteksi: " .. msg)
+            pcall(function() growtopia.warpTo("EXIT") end)
         end
     end
 end
@@ -607,7 +685,11 @@ local function mainLoop(my_id)
     seed_id            = config.block_id + 1
     reconnecting       = false
     action_count       = 0
+    gc_counter         = 0
     session_start_time = os.time()
+    last_action_time   = os.time()
+
+    randomizeTimers()
 
     farm_world_list    = parseWorldList(config.farm_world)
     current_farm_index = 1
@@ -617,7 +699,7 @@ local function mainLoop(my_id)
         if cw then table.insert(farm_world_list, cw) end
     end
 
-    Log("ROTASI MULAI! Total Farm World: " .. #farm_world_list)
+    Log("ROTASI 24/7 MULAI! Total Farm World: " .. #farm_world_list)
 
     runThread(function() reconnectMonitor(my_id) end)
 
@@ -625,7 +707,6 @@ local function mainLoop(my_id)
         checkWorkRestCycle(my_id)
         if not checkAntiPlayer(my_id) then break end
 
-        -- PASTI DILAKUKAN FORCE WARP KE WORLD TUJUAN + DOOR ID SAAT START
         local target_farm = getCurrentFarmWorld()
         local ok_farm = warpToWorld(target_farm, config.farm_door, my_id, true)
 
@@ -645,9 +726,9 @@ local function mainLoop(my_id)
     end
 end
 
-local ui = UserInterface.new("Auto Rotasi", "Ability")
+local ui = UserInterface.new("Auto Rotasi 24/7", "Ability")
 
-ui:addLabelApp("AUTO ROTASI BY LOLISTORE", "Ability")
+ui:addLabelApp("AUTO ROTASI 24/7 BY LOLISTORE", "Ability")
 ui:addDivider()
 
 local dialog_main = ui:addDialog("Main Config", "Setting utama rotasi", {})
@@ -688,8 +769,9 @@ ui:addChildButton(dialog_drop.menu, "Set dari posisi sekarang", "btn_drop_set")
 
 ui:addDivider()
 
-local dialog_sec = ui:addDialog("Security & Anti-Ban", "Proteksi akun", {})
+local dialog_sec = ui:addDialog("Security & Anti-Ban", "Proteksi akun 24/7", {})
 ui:addChildToggle(dialog_sec.menu,      "Anti Player/Mod",      config.enable_anti_player, "enable_anti_player")
+ui:addChildInputInt(dialog_sec.menu,    "Anti Player CD (detik)", config.anti_player_cd,   "sec", "Cooldown nunggu player pergi",        "Verified", "anti_player_cd")
 ui:addChildToggle(dialog_sec.menu,      "Mod Fly",              config.enable_fly,         "enable_fly")
 ui:addChildToggle(dialog_sec.menu,      "Show Punch (Visual)",  config.show_punch,         "show_punch")
 ui:addChildInputInt(dialog_sec.menu,    "Jam Kerja (Menit)",    config.work_min,           "min", "Durasi kerja sebelum istirahat",        "Verified", "work_min")
@@ -716,6 +798,7 @@ local temp = {
     drop_x             = tostring(config.drop_x),
     drop_y             = tostring(config.drop_y),
     enable_anti_player = config.enable_anti_player,
+    anti_player_cd     = tostring(config.anti_player_cd),
     enable_fly         = config.enable_fly,
     show_punch         = config.show_punch,
     work_min           = tostring(config.work_min),
@@ -753,6 +836,7 @@ function OnValue(type, name, value)
     elseif name == "drop_x"             then temp.drop_x             = tostring(value)
     elseif name == "drop_y"             then temp.drop_y             = tostring(value)
     elseif name == "enable_anti_player" then temp.enable_anti_player = value
+    elseif name == "anti_player_cd"     then temp.anti_player_cd     = tostring(value)
     elseif name == "enable_fly"         then temp.enable_fly         = value
     elseif name == "show_punch"         then temp.show_punch         = value
     elseif name == "work_min"           then temp.work_min           = tostring(value)
@@ -809,6 +893,7 @@ function OnValue(type, name, value)
         config.drop_x             = tonumber(temp.drop_x)       or config.drop_x
         config.drop_y             = tonumber(temp.drop_y)       or config.drop_y
         config.enable_anti_player = temp.enable_anti_player
+        config.anti_player_cd     = tonumber(temp.anti_player_cd) or config.anti_player_cd
         config.enable_fly         = temp.enable_fly
         config.show_punch         = temp.show_punch
         config.work_min           = tonumber(temp.work_min)     or config.work_min
@@ -838,6 +923,7 @@ function OnValue(type, name, value)
         pref:set("drop_x",             config.drop_x)
         pref:set("drop_y",             config.drop_y)
         pref:set("enable_anti_player", config.enable_anti_player)
+        pref:set("anti_player_cd",     config.anti_player_cd)
         pref:set("enable_fly",         config.enable_fly)
         pref:set("show_punch",         config.show_punch)
         pref:set("work_min",           config.work_min)
@@ -852,7 +938,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",   config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Config & Mod Fly tersimpan!")
+        growtopia.notify("Config 24/7 Full Guard Tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
@@ -875,14 +961,15 @@ function OnValue(type, name, value)
             thread_instance = thread_instance + 1
             local current_id = thread_instance
 
-            running      = false
+            running          = false
             Sleep(300)
-            running      = true
-            reconnecting = false
-            action_count = 0
+            running          = true
+            reconnecting     = false
+            action_count     = 0
+            gc_counter       = 0
 
-            sendVariant({v1 = "OnTextOverlay", v2 = "AUTO ROTASI BY LOLISTORE"})
-            Log("AUTO ROTASI BY LOLISTORE — Started!")
+            sendVariant({v1 = "OnTextOverlay", v2 = "AUTO ROTASI 24/7 BY LOLISTORE"})
+            Log("AUTO ROTASI 24/7 BY LOLISTORE — Started!")
 
             runThread(function()
                 mainLoop(current_id)
@@ -895,6 +982,7 @@ function OnValue(type, name, value)
     end
 end
 
+addHook(onConsoleMessage, "onConsoleMessage")
 addHook(onVariant, "onVariant")
 addHook(OnDraw, "onDraw")
 addHook(OnValue, "onValue")
