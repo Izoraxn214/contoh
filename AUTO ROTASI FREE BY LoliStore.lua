@@ -17,12 +17,12 @@ local config = {
     drop_y             = pref:get("drop_y",             0),
     marker_id          = pref:get("marker_id",           1422),
     enable_anti_player = pref:get("enable_anti_player", true),
+    enable_fly         = pref:get("enable_fly",         true), -- Mod Fly Toggle
     work_min           = pref:get("work_min",           45),
     rest_min           = pref:get("rest_min",           10),
     enable_jitter      = pref:get("enable_jitter",      false),
     show_punch         = pref:get("show_punch",         true),
     
-    -- CONFIG DELAY & FEATURE BARU
     delay_place        = pref:get("delay_place",        120),
     delay_punch        = pref:get("delay_punch",        140),
     delay_harvest      = pref:get("delay_harvest",      180),
@@ -47,6 +47,18 @@ local current_farm_index = 1
 
 local function Log(msg)
     LogToConsole("`5[LoliStore] `0" .. tostring(msg))
+end
+
+local function applyModFly()
+    if config.enable_fly then
+        pcall(function()
+            if setFly then
+                setFly(true)
+            elseif growtopia and growtopia.setFly then
+                growtopia.setFly(true)
+            end
+        end)
+    end
 end
 
 local function parseWorldList(raw_str)
@@ -79,16 +91,13 @@ local function isThreadActive(my_id)
     return running and not reconnecting and (thread_instance == my_id)
 end
 
--- LOGIKA SAFE & SMART DELAY IMPLEMENTATION
 local function ActionSleep(base_ms)
     local ms = base_ms
 
-    -- Safe Delay: Batasi minimal delay tidak boleh di bawah 100ms agar aman dari autoban
     if config.enable_safe_delay and ms < 100 then
         ms = 100
     end
 
-    -- Smart Delay: Tambahkan jeda mikro acak sesuai respon ritme server
     if config.enable_smart_delay then
         ms = ms + math.random(15, 65)
         action_count = action_count + 1
@@ -230,19 +239,22 @@ local function walkTo(tx, ty)
     return false
 end
 
-local function warpToWorld(target_world, door_id, my_id)
+-- LOGIKA WARP DENGAN FORCE ID DOOR
+local function warpToWorld(target_world, door_id, my_id, force)
     if not target_world or target_world == "" then return false end
     local current_w = safeGetWorldName()
-    if current_w and string.upper(current_w) == string.upper(target_world) then
+
+    -- Jika tidak di-force dan sudah di world yang sama, lewati warp
+    if not force and current_w and string.upper(current_w) == string.upper(target_world) then
         return true
     end
 
-    Log("Warp ke World: " .. target_world)
     local warp_str = target_world
     if door_id and door_id ~= "" then
         warp_str = warp_str .. "|" .. door_id
     end
 
+    Log("Warp ke World: " .. warp_str)
     growtopia.warpTo(warp_str)
 
     local elapsed = 0
@@ -251,6 +263,7 @@ local function warpToWorld(target_world, door_id, my_id)
         local w = safeGetWorldName()
         if w and string.upper(w) == string.upper(target_world) then
             Sleep(1000)
+            applyModFly()
             return true
         end
         Sleep(1000)
@@ -317,7 +330,6 @@ local function getPlantableTiles()
     return result
 end
 
--- IMPLEMENTASI ANTI MISS PADA PLANT
 local function doPlant(my_id)
     if invCount(seed_id) < config.low_trigger then return end
 
@@ -336,14 +348,13 @@ local function doPlant(my_id)
                     if not isThreadActive(my_id) then return end
                     placeBlock(t.x, t.y, seed_id, true)
 
-                    -- Anti Miss Check: Jika toggle aktif, pastikan ubin terisi seed (fg == seed_id)
                     if config.enable_anti_miss then
                         local check_tile = safeGetTile(t.x, t.y)
                         if check_tile and check_tile.fg == seed_id then
-                            break -- Berhasil terkonfirmasi oleh server
+                            break
                         else
                             retry = retry + 1
-                            ActionSleep(100) -- Re-try jika miss
+                            ActionSleep(100)
                         end
                     else
                         break
@@ -354,7 +365,6 @@ local function doPlant(my_id)
     end
 end
 
--- IMPLEMENTASI ANTI MISS PADA HARVEST
 local function doHarvestLoop(my_id)
     local ready_tiles = getReadyHarvestTiles()
     if #ready_tiles == 0 then return end
@@ -372,7 +382,6 @@ local function doHarvestLoop(my_id)
                     if not isThreadActive(my_id) then return end
                     punchTile(t.x, t.y)
 
-                    -- Anti Miss Check: Pastikan pohon sudah hancur (fg == 0)
                     if config.enable_anti_miss then
                         local check_tile = safeGetTile(t.x, t.y)
                         if check_tile and check_tile.fg == 0 then
@@ -409,7 +418,8 @@ local function doDrop(my_id)
 
     local target_drop_world = (config.drop_world and config.drop_world ~= "") and config.drop_world or getCurrentFarmWorld()
 
-    local ok_drop_warp = warpToWorld(target_drop_world, config.drop_door, my_id)
+    -- Warp ke storage world dengan ID door
+    local ok_drop_warp = warpToWorld(target_drop_world, config.drop_door, my_id, true)
     if not ok_drop_warp then
         Log("Gagal warp ke Storage World! Batal drop item demi keamanan.")
         return
@@ -457,7 +467,8 @@ local function doDrop(my_id)
         Log("DROP gagal di semua titik percobaan!")
     end
 
-    warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id)
+    -- KEMBALI WARP KE WORLD FARM AKTIF DENGAN FORCE DOOR ID
+    warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
 end
 
 local function getPnbTargets(cx, cy)
@@ -520,6 +531,7 @@ end
 local function processCurrentWorld(my_id)
     while isThreadActive(my_id) do
         if not checkAntiPlayer(my_id) then return false end
+        applyModFly()
 
         local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
         if invCount(target_item) >= config.high_trigger then
@@ -570,7 +582,7 @@ local function reconnectMonitor(my_id)
             while running and (thread_instance == my_id) do
                 Sleep(2000)
                 local target_w = getCurrentFarmWorld()
-                local ok = warpToWorld(target_w, config.farm_door, my_id)
+                local ok = warpToWorld(target_w, config.farm_door, my_id, true)
                 if ok then
                     Log("Berhasil reconnect ke world " .. tostring(target_w))
                     break
@@ -613,8 +625,9 @@ local function mainLoop(my_id)
         checkWorkRestCycle(my_id)
         if not checkAntiPlayer(my_id) then break end
 
+        -- PASTI DILAKUKAN FORCE WARP KE WORLD TUJUAN + DOOR ID SAAT START
         local target_farm = getCurrentFarmWorld()
-        local ok_farm = warpToWorld(target_farm, config.farm_door, my_id)
+        local ok_farm = warpToWorld(target_farm, config.farm_door, my_id, true)
 
         if ok_farm then
             local finished_world = processCurrentWorld(my_id)
@@ -677,6 +690,7 @@ ui:addDivider()
 
 local dialog_sec = ui:addDialog("Security & Anti-Ban", "Proteksi akun", {})
 ui:addChildToggle(dialog_sec.menu,      "Anti Player/Mod",      config.enable_anti_player, "enable_anti_player")
+ui:addChildToggle(dialog_sec.menu,      "Mod Fly",              config.enable_fly,         "enable_fly")
 ui:addChildToggle(dialog_sec.menu,      "Show Punch (Visual)",  config.show_punch,         "show_punch")
 ui:addChildInputInt(dialog_sec.menu,    "Jam Kerja (Menit)",    config.work_min,           "min", "Durasi kerja sebelum istirahat",        "Verified", "work_min")
 ui:addChildInputInt(dialog_sec.menu,    "Jam Istirahat (Menit)", config.rest_min,          "min", "Durasi istirahat/AFK",                "Verified", "rest_min")
@@ -702,6 +716,7 @@ local temp = {
     drop_x             = tostring(config.drop_x),
     drop_y             = tostring(config.drop_y),
     enable_anti_player = config.enable_anti_player,
+    enable_fly         = config.enable_fly,
     show_punch         = config.show_punch,
     work_min           = tostring(config.work_min),
     rest_min           = tostring(config.rest_min),
@@ -738,6 +753,7 @@ function OnValue(type, name, value)
     elseif name == "drop_x"             then temp.drop_x             = tostring(value)
     elseif name == "drop_y"             then temp.drop_y             = tostring(value)
     elseif name == "enable_anti_player" then temp.enable_anti_player = value
+    elseif name == "enable_fly"         then temp.enable_fly         = value
     elseif name == "show_punch"         then temp.show_punch         = value
     elseif name == "work_min"           then temp.work_min           = tostring(value)
     elseif name == "rest_min"           then temp.rest_min           = tostring(value)
@@ -793,6 +809,7 @@ function OnValue(type, name, value)
         config.drop_x             = tonumber(temp.drop_x)       or config.drop_x
         config.drop_y             = tonumber(temp.drop_y)       or config.drop_y
         config.enable_anti_player = temp.enable_anti_player
+        config.enable_fly         = temp.enable_fly
         config.show_punch         = temp.show_punch
         config.work_min           = tonumber(temp.work_min)     or config.work_min
         config.rest_min           = tonumber(temp.rest_min)     or config.rest_min
@@ -821,6 +838,7 @@ function OnValue(type, name, value)
         pref:set("drop_x",             config.drop_x)
         pref:set("drop_y",             config.drop_y)
         pref:set("enable_anti_player", config.enable_anti_player)
+        pref:set("enable_fly",         config.enable_fly)
         pref:set("show_punch",         config.show_punch)
         pref:set("work_min",           config.work_min)
         pref:set("rest_min",           config.rest_min)
@@ -834,7 +852,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",   config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Config & Proteksi Delay tersimpan!")
+        growtopia.notify("Config & Mod Fly tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
