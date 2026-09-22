@@ -44,13 +44,15 @@ local gc_counter         = 0
 local thread_instance    = 0
 local session_start_time = 0
 
--- WATCHDOG & DYNAMIC TIMERS
 local last_action_time   = 0
 local current_work_sec   = 0
 local current_rest_sec   = 0
 
 local farm_world_list    = {}
 local current_farm_index = 1
+
+-- Forward Declaration
+local doDrop
 
 local function Log(msg)
     LogToConsole("`5[LoliStore 24/7] `0" .. tostring(msg))
@@ -65,8 +67,32 @@ local function updateActionTime()
     end
 end
 
+local function invCount(item_id)
+    local ok, inv = pcall(getInventory)
+    if not ok or type(inv) ~= "table" then return 0 end
+    for _, item in pairs(inv) do
+        if item and item.id == item_id then return item.amount end
+    end
+    return 0
+end
+
+local function isThreadActive(my_id)
+    return running and not reconnecting and (thread_instance == my_id)
+end
+
+-- LOGIKA PRIORITAS DROP (INTERUPSI LANGSUNG)
+local function checkPriorityDrop(my_id)
+    if not isThreadActive(my_id) then return false end
+    local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
+    if invCount(target_item) >= config.high_trigger then
+        Log("`3[PRIORITY DROP] Item penuh/mencapai target (" .. invCount(target_item) .. "). Langsung drop dulu!`0")
+        doDrop(my_id)
+        return true
+    end
+    return false
+end
+
 local function randomizeTimers()
-    -- Memberi variasi acak (-3 sampai +5 menit) pada jam kerja dan istirahat
     local work_var = math.random(-3, 5)
     local rest_var = math.random(-2, 3)
 
@@ -114,10 +140,6 @@ local function nextFarmWorld()
         current_farm_index = 1
     end
     Log("Rotasi berpindah ke World Farm berikutnya: " .. getCurrentFarmWorld())
-end
-
-local function isThreadActive(my_id)
-    return running and not reconnecting and (thread_instance == my_id)
 end
 
 local function ActionSleep(base_ms)
@@ -223,7 +245,6 @@ local function checkAntiPlayer(my_id)
     return true
 end
 
--- WORK-REST CYCLE HUMANIZED (DYNAMIC JITTER)
 local function checkWorkRestCycle(my_id)
     if config.work_min <= 0 or config.rest_min <= 0 then return end
     local elapsed_work = os.time() - session_start_time
@@ -242,32 +263,21 @@ local function checkWorkRestCycle(my_id)
         end
 
         session_start_time = os.time()
-        randomizeTimers() -- Acak durasi untuk siklus berikutnya
+        randomizeTimers()
         Log("Istirahat selesai! Kembali ke world farm...")
         warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
     end
 end
 
--- WATCHDOG TIMER (ANTI-STUCK GUARD)
 local function checkWatchdog(my_id)
     if last_action_time == 0 then return end
     local idle_time = os.time() - last_action_time
 
-    -- Jika bot tidak melakukan aksi selama > 180 detik (3 menit), paksa re-warp
     if idle_time >= 180 then
         Log("`4[WATCHDOG] Bot terdeteksi stuck/freeze (" .. idle_time .. " detik)! Memaksa re-warp...")
         last_action_time = os.time()
         warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
     end
-end
-
-local function invCount(item_id)
-    local ok, inv = pcall(getInventory)
-    if not ok or type(inv) ~= "table" then return 0 end
-    for _, item in pairs(inv) do
-        if item and item.id == item_id then return item.amount end
-    end
-    return 0
 end
 
 local function safeGetTile(tx, ty)
@@ -398,6 +408,7 @@ local function doPlant(my_id)
 
     for _, t in ipairs(plant_tiles) do
         if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
+        if checkPriorityDrop(my_id) then end
         if invCount(seed_id) <= config.low_trigger then break end
 
         local tile = safeGetTile(t.x, t.y)
@@ -431,6 +442,7 @@ local function doHarvestLoop(my_id)
 
     for _, t in ipairs(ready_tiles) do
         if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
+        if checkPriorityDrop(my_id) then end
         if invCount(config.block_id) >= config.high_trigger then break end
 
         local tile = safeGetTile(t.x, t.y)
@@ -455,12 +467,13 @@ local function doHarvestLoop(my_id)
                     end
                 end
                 collectNearby()
+                checkPriorityDrop(my_id)
             end
         end
     end
 end
 
-local function doDrop(my_id)
+doDrop = function(my_id)
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
     local total_item  = invCount(target_item)
     
@@ -548,6 +561,13 @@ local function doPnb(my_id)
 
     while isThreadActive(my_id) do
         if not checkAntiPlayer(my_id) then return end
+        
+        -- PRIORITY DROP CHECK SAAT PNB
+        if checkPriorityDrop(my_id) then
+            walkTo(config.pnb_x, config.pnb_y)
+            Sleep(300)
+        end
+
         if invCount(config.block_id) <= config.low_trigger then
             return "low_block"
         end
@@ -584,6 +604,7 @@ local function doPnb(my_id)
         end
 
         collectNearby()
+        checkPriorityDrop(my_id)
     end
 end
 
@@ -593,11 +614,8 @@ local function processCurrentWorld(my_id)
         applyModFly()
         checkWatchdog(my_id)
 
-        local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
-        if invCount(target_item) >= config.high_trigger then
-            doDrop(my_id)
-            if not isThreadActive(my_id) then return false end
-        end
+        -- PRIORITAS UTAMA DROP
+        checkPriorityDrop(my_id)
 
         local ready_tiles = getReadyHarvestTiles()
         local plant_tiles = getPlantableTiles()
@@ -630,7 +648,6 @@ local function processCurrentWorld(my_id)
     return false
 end
 
--- EXPONENTIAL BACKOFF RECONNECT MONITOR
 local function reconnectMonitor(my_id)
     local retry_delay = 5000
     while running and (thread_instance == my_id) do
@@ -647,10 +664,9 @@ local function reconnectMonitor(my_id)
                 local ok = warpToWorld(target_w, config.farm_door, my_id, true)
                 if ok then
                     Log("Berhasil reconnect ke world " .. tostring(target_w))
-                    retry_delay = 5000 -- Reset delay jika berhasil
+                    retry_delay = 5000
                     break
                 else
-                    -- Tingkatkan delay bertahap hingga max 60 detik (Exponential Backoff)
                     retry_delay = math.min(60000, retry_delay + 5000)
                     Log("Gagal reconnect, mencoba lagi dalam " .. math.floor(retry_delay / 1000) .. " detik...")
                 end
@@ -660,7 +676,6 @@ local function reconnectMonitor(my_id)
     end
 end
 
--- SERVER & CONSOLE MESSAGE GUARD
 local function onConsoleMessage(msg)
     if running and type(msg) == "string" then
         local lower = string.lower(msg)
@@ -938,7 +953,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",   config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Config 24/7 Full Guard Tersimpan!")
+        growtopia.notify("Config & Priority Drop Tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
