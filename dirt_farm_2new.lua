@@ -1,19 +1,19 @@
 -- ==========================================
--- SET CONFIG TERPUSAT (UBAH SETELAN DI SINI)
+-- SET CONFIG TERPUSAT (SUDAH DIKOSONGKAN)
 -- ==========================================
 Config = {
     -- Target World Dirt Farm
-    WorldList = {"TKTYW", "QVSVF", "FCMQW", "DEJCA", "ACMFA", "FZSGR", "KWYRY", "DWTWG", "JZUXA", "TUIGE", "JTLQM", "IMCKM", "DQKQU", "FUQRB", "WZWGW"},
-    DFWorldDoor = "IWP2145",
+    WorldList = {},
+    DFWorldDoor = "",
 
     -- World Storage Seed & Restock
-    WorldSaveSeed = "PLATSAVEHAM",
-    WorldSaveSeedDoor = "12345",
+    WorldSaveSeed = "",
+    WorldSaveSeedDoor = "",
 
     -- Setelan Auto Drop
     AutoDropEnabled = true,
-    DropWorld = "PLATSAVEHAM",
-    DropDoor = "12345",
+    DropWorld = "",
+    DropDoor = "",
     DropCooldown = 20, -- Jeda antar drop (detik)
     KeepPercent = 0.50, -- MENYISAKAN 50% UNTUK SEMUA ITEM DI BACKPACK SAAT DROP
 
@@ -21,16 +21,16 @@ Config = {
     RestEveryWorld = 15, -- Istirahat setiap N world selesai
     RestDuration = 15,   -- Durasi istirahat (detik)
 
-    -- Slot Drop Items (8 Slots)
+    -- Slot Drop Items (8 Slots - Kosong)
     ItemSlots = {
-        { id = 3,  min = 190, x = 98, y = 22 }, -- Seed Dirt
-        { id = 2,  min = 190, x = 98, y = 23 }, -- Dirt Block
-        { id = 15, min = 190, x = 98, y = 21 }, -- Seed Cave
-        { id = 14, min = 50,  x = 98, y = 20 }, -- Cave Block
-        { id = 11, min = 190, x = 98, y = 19 }, -- Seed Rock
-        { id = 10, min = 50,  x = 98, y = 18 }, -- Rock Block
-        { id = 5,  min = 190, x = 98, y = 17 }, -- Seed Lava
-        { id = 4,  min = 50,  x = 98, y = 16 }  -- Lava Block
+        { id = 0, min = 0, x = 0, y = 0 },
+        { id = 0, min = 0, x = 0, y = 0 },
+        { id = 0, min = 0, x = 0, y = 0 },
+        { id = 0, min = 0, x = 0, y = 0 },
+        { id = 0, min = 0, x = 0, y = 0 },
+        { id = 0, min = 0, x = 0, y = 0 },
+        { id = 0, min = 0, x = 0, y = 0 },
+        { id = 0, min = 0, x = 0, y = 0 }
     },
 
     -- Speed & Delay Execution (ms)
@@ -43,8 +43,8 @@ Config = {
 
     -- Platform & Storage Settings
     PlatformID = 1324,
-    StoragePlatWorld = "PLATSAVEHAM",
-    StoragePlatDoor = "12345",
+    StoragePlatWorld = "",
+    StoragePlatDoor = "",
     PickPlat_Enabled = true,
 
     -- World Lock & Door Entrance
@@ -53,14 +53,14 @@ Config = {
 
     -- Auto Pick Door
     PickDoor_Enabled = true,
-    PickDoor_World = "PLATSAVEHAM",
-    PickDoor_Door = "12345",
+    PickDoor_World = "",
+    PickDoor_Door = "",
     PickDoor_ID = 5036,
 
     -- Auto Pick WL
     PickWL_Enabled = true,
-    PickWL_World = "PLATSAVEHAM",
-    PickWL_Door = "12345",
+    PickWL_World = "",
+    PickWL_Door = "",
     PickWL_ID = 242,
 
     -- Random World Feature
@@ -89,6 +89,11 @@ function saveConfigToStorage()
     if Config.WorldList then
         table.insert(lines, "WorldList=" .. table.concat(Config.WorldList, ","))
     end
+    if Config.ItemSlots then
+        for idx, slot in ipairs(Config.ItemSlots) do
+            table.insert(lines, string.format("ItemSlot_%d=%d,%d,%d,%d", idx, slot.id, slot.min, slot.x, slot.y))
+        end
+    end
 
     local dataStr = table.concat(lines, "\n")
     local ok, err = pcall(writeToLocal, CONFIG_FILE, dataStr)
@@ -109,6 +114,19 @@ function loadConfigFromStorage()
                     local list = {}
                     for w in v:gmatch("[^,%s]+") do table.insert(list, w) end
                     if #list > 0 then Config.WorldList = list end
+                elseif k:find("^ItemSlot_%d+$") then
+                    local idx = tonumber(k:match("^ItemSlot_(%d+)$"))
+                    if idx and Config.ItemSlots[idx] then
+                        local id, min, x, y = v:match("(%d+),(%d+),(%d+),(%d+)")
+                        if id then
+                            Config.ItemSlots[idx] = {
+                                id = tonumber(id),
+                                min = tonumber(min),
+                                x = tonumber(x),
+                                y = tonumber(y)
+                            }
+                        end
+                    end
                 else
                     if v == "true" then v = true
                     elseif v == "false" then v = false
@@ -410,7 +428,7 @@ function tnjk1_3(x, y)
 
     for i = 1, (HitCount or 1) do
         sendPacketRaw(false, packet)
-        Sleep(100)
+        Sleep(100 + math.random(10, 20))
     end
     return true
 end
@@ -452,6 +470,7 @@ function trh1_3(x, y, id)
     packet.y = p.posY
 
     sendPacketRaw(false, packet)
+    Sleep(math.random(10, 20))
     return true
 end
 
@@ -518,7 +537,7 @@ function ensureSetupItems()
     local currentWL = inv(WorldLockID)
     local currentDoor = inv(EntranceID)
 
-    if currentWL == 0 or currentDoor < 2 then
+    if currentWL == 0 or currentDoor < 3 then
         LogToConsole("`w[`0Setup`w] WL (" .. currentWL .. ") / Entrance (" .. currentDoor .. ") kurang. Restock ke Storage...")
         local currentWorld = safeGetWorldName()
         if currentWorld == "" then return end
@@ -537,7 +556,7 @@ function ensureSetupItems()
         Sleep(1000)
 
         local attempts = 0
-        while (inv(WorldLockID) == 0 or inv(EntranceID) < 2) and autoDF_running and attempts < 5 do
+        while (inv(WorldLockID) == 0 or inv(EntranceID) < 3) and autoDF_running and attempts < 5 do
             local foundAny = false
             for _, object in pairs(safeGetObjectList()) do
                 if not autoDF_running then return end
@@ -555,7 +574,7 @@ function ensureSetupItems()
                         sdt_11(1)
                         Sleep(500)
                         
-                        if inv(WorldLockID) > 0 and inv(EntranceID) >= 2 then break end
+                        if inv(WorldLockID) > 0 and inv(EntranceID) >= 3 then break end
                     end
                 end
             end
@@ -563,7 +582,7 @@ function ensureSetupItems()
                 attempts = attempts + 1
                 Sleep(1000)
             else
-                if inv(WorldLockID) > 0 and inv(EntranceID) >= 2 then break end
+                if inv(WorldLockID) > 0 and inv(EntranceID) >= 3 then break end
                 attempts = attempts + 1
                 Sleep(500)
             end
@@ -576,6 +595,9 @@ function ensureSetupItems()
     end
 end
 
+-- ==========================================
+-- LOGIKA PEMBUATAN RANDOM WORLD (FOTO 1 - 15)
+-- ==========================================
 function setupNewRandomWorld()
     if not autoDF_running then return false end
     if hasWorldLock() then
@@ -587,64 +609,100 @@ function setupNewRandomWorld()
     if not autoDF_running then return false end
 
     local doorX, doorY = findMainDoor()
-    LogToConsole("`w[`0Setup`w] Memasang WL dan Entrance di sekitar Main Door...")
+    LogToConsole("`w[`0Setup`w] Membangun Enclosure Dirt Farm di sekitar Main Door...")
 
+    -- 1. Bersihkan tile atas Main Door jika ada blok terhalang
     if safeTile(doorX, doorY - 1).fg ~= 0 and safeTile(doorX, doorY - 1).fg ~= WorldLockID then
         walkTo(doorX, doorY, 2000)
         local timeout = 0
         while safeTile(doorX, doorY - 1).fg ~= 0 and autoDF_running and timeout < 20 do
             tnjk1_3(doorX, doorY - 1)
-            Sleep(dbk)
+            Sleep(dbk + math.random(10, 30))
             timeout = timeout + 1
         end
     end
 
+    -- 2. Pasang Lock di (X, Y-1) [Foto 2]
     if inv(WorldLockID) > 0 and safeTile(doorX, doorY - 1).fg == 0 then
         walkTo(doorX, doorY, 2000)
         Sleep(300)
         local timeout = 0
         while safeTile(doorX, doorY - 1).fg == 0 and inv(WorldLockID) > 0 and autoDF_running and timeout < 10 do
             trh1_3(doorX, doorY - 1, WorldLockID)
-            Sleep(dpc)
+            Sleep(dpc + math.random(10, 20))
             timeout = timeout + 1
         end
         Sleep(300)
     end
 
-    local sidePositions = { doorX - 1, doorX + 1 }
-
-    for _, targetX in ipairs(sidePositions) do
-        if not autoDF_running then break end
-
-        if safeTile(targetX, doorY).fg ~= 0 and safeTile(targetX, doorY).fg ~= EntranceID then
-            walkTo(doorX, doorY, 2000)
-            Sleep(300)
-            local timeout = 0
-            while safeTile(targetX, doorY).fg ~= 0 and autoDF_running and timeout < 20 do
-                tnjk1_3(targetX, doorY)
-                Sleep(dbk)
-                timeout = timeout + 1
-            end
+    -- 3. Pasang Entrance Kiri di (X-1, Y) [Foto 3]
+    if safeTile(doorX - 1, doorY).fg ~= EntranceID and inv(EntranceID) > 0 then
+        walkTo(doorX, doorY, 2000)
+        if safeTile(doorX - 1, doorY).fg ~= 0 then
+            tnjk1_3(doorX - 1, doorY)
+            Sleep(dbk + math.random(10, 20))
         end
-
-        if safeTile(targetX, doorY + 1).fg == 0 and inv(2) > 0 then
-            trh1_3(targetX, doorY + 1, 2)
-            Sleep(dpc)
-        end
-
-        if inv(EntranceID) > 0 and safeTile(targetX, doorY).fg ~= EntranceID then
-            walkTo(doorX, doorY, 2000)
-            Sleep(300)
-            local timeout = 0
-            while safeTile(targetX, doorY).fg ~= EntranceID and inv(EntranceID) > 0 and autoDF_running and timeout < 10 do
-                trh1_3(targetX, doorY, EntranceID)
-                Sleep(dpc)
-                timeout = timeout + 1
-            end
-            Sleep(300)
-        end
+        trh1_3(doorX - 1, doorY, EntranceID)
+        Sleep(dpc)
     end
 
+    -- 4. Pasang Entrance Kanan di (X+1, Y) [Foto 4]
+    if safeTile(doorX + 1, doorY).fg ~= EntranceID and inv(EntranceID) > 0 then
+        walkTo(doorX, doorY, 2000)
+        if safeTile(doorX + 1, doorY).fg ~= 0 then
+            tnjk1_3(doorX + 1, doorY)
+            Sleep(dbk + math.random(10, 20))
+        end
+        trh1_3(doorX + 1, doorY, EntranceID)
+        Sleep(dpc)
+    end
+
+    -- 5. Pasang Dirt Pembungkus Kiri Atas (X-1, Y-1) [Foto 5]
+    if safeTile(doorX - 1, doorY - 1).fg == 0 and inv(2) > 0 then
+        trh1_3(doorX - 1, doorY - 1, 2)
+        Sleep(dpc)
+    end
+
+    -- 6. Pasang Dirt Pembungkus Kanan Atas (X+1, Y-1) [Foto 6]
+    if safeTile(doorX + 1, doorY - 1).fg == 0 and inv(2) > 0 then
+        trh1_3(doorX + 1, doorY - 1, 2)
+        Sleep(dpc)
+    end
+
+    -- 7. Break Dirt Bawah Kanan (X+1, Y+1) [Foto 7]
+    if safeTile(doorX + 1, doorY + 1).fg ~= 0 and not isUnbreakable(safeTile(doorX + 1, doorY + 1).fg) then
+        tnjk1_3(doorX + 1, doorY + 1)
+        Sleep(dbk + math.random(10, 20))
+    end
+
+    -- 8. Break Dirt Bawah Kiri (X-1, Y+1) [Foto 8]
+    if safeTile(doorX - 1, doorY + 1).fg ~= 0 and not isUnbreakable(safeTile(doorX - 1, doorY + 1).fg) then
+        tnjk1_3(doorX - 1, doorY + 1)
+        Sleep(dbk + math.random(10, 20))
+    end
+
+    -- 9. Turun / Jalan ke (X+1, Y+1) [Foto 9]
+    walkTo(doorX + 1, doorY + 1, 2000)
+    Sleep(300)
+
+    -- 10. Pasang Entrance di (X+1, Y+1) [Foto 10]
+    if safeTile(doorX + 1, doorY + 1).fg == 0 and inv(EntranceID) > 0 then
+        trh1_3(doorX + 1, doorY + 1, EntranceID)
+        Sleep(dpc)
+    end
+
+    -- 11 & 12. Edit Door ID di (X+1, Y+1) [Foto 11 & 12]
+    if safeTile(doorX + 1, doorY + 1).fg == EntranceID then
+        local doorTargetID = (DFWorldDoor ~= nil and DFWorldDoor ~= "") and DFWorldDoor or "IWP2145"
+        sendPacket(2, "action|dialog_return\ndialog_name|door_edit\ntilex|" .. (doorX + 1) .. "|\ntiley|" .. (doorY + 1) .. "|\ndoor_name||\ndoor_target||\ndoor_id|" .. doorTargetID)
+        Sleep(500)
+    end
+
+    -- 13, 14, 15. Edit Lock di (X, Y-1) untuk "Ignore empty air" [Foto 13, 14, 15]
+    sendPacket(2, "action|dialog_return\ndialog_name|lock_edit\ntilex|" .. doorX .. "|\ntiley|" .. (doorY - 1) .. "|\ncheckbox_ignore_air|1")
+    Sleep(500)
+
+    LogToConsole("`w[`2Setup Complete`w] Enclosure, Lock, dan Door ID berhasil disetel!")
     return true
 end
 
@@ -841,7 +899,7 @@ function plntDf_122()
         end
 
         for tilex = 2, 25 do
-            if not autoDF_running then break end
+            if not autoDF_running then return end
 
             if safeTile(tilex, 25).fg == 3 and safeTile(tilex, 25).readyharvest then
                 walkTo(tilex - 1, 25, 1000)
@@ -1527,6 +1585,11 @@ local module_json = [[
             "alias": "btn_apply_config"
         },
         {
+            "type": "button",
+            "text": "Load Config (Muat Setelan)",
+            "alias": "btn_load_config"
+        },
+        {
             "type": "divider"
         },
         {
@@ -1888,6 +1951,14 @@ function onValue(type_evt, name, value)
     elseif name == "btn_apply_config" then
         applyConfig()
         LogToConsole("`w[`2SUCCESS`w] Config berhasil disimpan & diterapkan!")
+
+    elseif name == "btn_load_config" then
+        if loadConfigFromStorage() then
+            applyConfig()
+            LogToConsole("`w[`2SUCCESS`w] Config berhasil dimuat ulang dari memori HP!")
+        else
+            LogToConsole("`4[`0Warning`4] File config tidak ditemukan atau masih kosong!")
+        end
 
     elseif name == "toggle_pos_check" then
         if value then
