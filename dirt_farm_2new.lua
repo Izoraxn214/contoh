@@ -1463,7 +1463,7 @@ function LoopMultiWorld()
 
         if not UseRandomDF then
             index_world = index_world + 1
-            if index_world > #WorldList me then index_world = 1 end
+            if index_world > #WorldList then index_world = 1 end
         end
 
         collectgarbage("collect")
