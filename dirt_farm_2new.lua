@@ -1,27 +1,27 @@
 -- ==========================================
--- SET CONFIG TERPUSAT (SUDAH DIKOSONGKAN)
+-- SET CONFIG TERPUSAT (SUDAH DIKEMBALIKAN)
 -- ==========================================
 Config = {
     -- Target World Dirt Farm
-    WorldList = {},
-    DFWorldDoor = "",
+    WorldList = {"ENYEG", "INXHV", "HRILV"},
+    DFWorldDoor = "IWP2145",
 
     -- World Storage Seed & Restock
-    WorldSaveSeed = "",
-    WorldSaveSeedDoor = "",
+    WorldSaveSeed = "PLATSAVEHAM",
+    WorldSaveSeedDoor = "12345",
 
     -- Setelan Auto Drop
     AutoDropEnabled = true,
-    DropWorld = "",
-    DropDoor = "",
+    DropWorld = "PLATSAVEHAM",
+    DropDoor = "12345",
     DropCooldown = 20, -- Jeda antar drop (detik)
-    KeepPercent = 0.50, -- MENYISAKAN 50% UNTUK SEMUA ITEM DI BACKPACK SAAT DROP
+    KeepPercent = 0.50, -- Menyisakan 50% di tas saat drop
 
     -- Fitur Anti FC / Stabilitas Memori
     RestEveryWorld = 15, -- Istirahat setiap N world selesai
     RestDuration = 15,   -- Durasi istirahat (detik)
 
-    -- Slot Drop Items (8 Slots - Kosong)
+    -- Slot Drop Items (8 Slots)
     ItemSlots = {
         { id = 0, min = 0, x = 0, y = 0 },
         { id = 0, min = 0, x = 0, y = 0 },
@@ -43,8 +43,8 @@ Config = {
 
     -- Platform & Storage Settings
     PlatformID = 1324,
-    StoragePlatWorld = "",
-    StoragePlatDoor = "",
+    StoragePlatWorld = "PLATSAVEHAM",
+    StoragePlatDoor = "12345",
     PickPlat_Enabled = true,
 
     -- World Lock & Door Entrance
@@ -53,14 +53,14 @@ Config = {
 
     -- Auto Pick Door
     PickDoor_Enabled = true,
-    PickDoor_World = "",
-    PickDoor_Door = "",
+    PickDoor_World = "PLATSAVEHAM",
+    PickDoor_Door = "12345",
     PickDoor_ID = 5036,
 
     -- Auto Pick WL
     PickWL_Enabled = true,
-    PickWL_World = "",
-    PickWL_Door = "",
+    PickWL_World = "PLATSAVEHAM",
+    PickWL_Door = "12345",
     PickWL_ID = 242,
 
     -- Random World Feature
@@ -75,72 +75,6 @@ Config = {
 
 local CONFIG_FILE = "df_config_save.txt"
 local worldCompletedCount = 0
-
--- ==========================================
--- FUNGSI SAVE & LOAD CONFIG DARI HP (PERSISTENT)
--- ==========================================
-function saveConfigToStorage()
-    local lines = {}
-    for k, v in pairs(Config) do
-        if type(v) ~= "table" then
-            table.insert(lines, k .. "=" .. tostring(v))
-        end
-    end
-    if Config.WorldList then
-        table.insert(lines, "WorldList=" .. table.concat(Config.WorldList, ","))
-    end
-    if Config.ItemSlots then
-        for idx, slot in ipairs(Config.ItemSlots) do
-            table.insert(lines, string.format("ItemSlot_%d=%d,%d,%d,%d", idx, slot.id, slot.min, slot.x, slot.y))
-        end
-    end
-
-    local dataStr = table.concat(lines, "\n")
-    local ok, err = pcall(writeToLocal, CONFIG_FILE, dataStr)
-    if ok then
-        LogToConsole("`w[`2Config Saved`w] Setelan disimpan ke memori HP!")
-    else
-        LogToConsole("`4[`0Config Error`4] Gagal menyimpan file config!")
-    end
-end
-
-function loadConfigFromStorage()
-    local ok, content = pcall(readFromLocal, CONFIG_FILE)
-    if ok and content and content ~= "" then
-        for line in content:gmatch("[^\r\n]+") do
-            local k, v = line:match("^([^=]+)=(.*)$")
-            if k and v then
-                if k == "WorldList" then
-                    local list = {}
-                    for w in v:gmatch("[^,%s]+") do table.insert(list, w) end
-                    if #list > 0 then Config.WorldList = list end
-                elseif k:find("^ItemSlot_%d+$") then
-                    local idx = tonumber(k:match("^ItemSlot_(%d+)$"))
-                    if idx and Config.ItemSlots[idx] then
-                        local id, min, x, y = v:match("(%d+),(%d+),(%d+),(%d+)")
-                        if id then
-                            Config.ItemSlots[idx] = {
-                                id = tonumber(id),
-                                min = tonumber(min),
-                                x = tonumber(x),
-                                y = tonumber(y)
-                            }
-                        end
-                    end
-                else
-                    if v == "true" then v = true
-                    elseif v == "false" then v = false
-                    elseif tonumber(v) then v = tonumber(v)
-                    end
-                    Config[k] = v
-                end
-            end
-        end
-        LogToConsole("`w[`2Config Loaded`w] Berhasil memuat setelan lokal!")
-        return true
-    end
-    return false
-end
 
 -- ==========================================
 -- SINKRONISASI CONFIG KE GLOBAL VARIABLES
@@ -192,11 +126,8 @@ function applyConfig()
 
     AutoPickEnabled = Config.AutoPickEnabled
     AutoFind_Enabled = Config.AutoFind_Enabled
-    
-    saveConfigToStorage()
 end
 
-loadConfigFromStorage()
 applyConfig()
 
 -- ==========================================
@@ -595,9 +526,6 @@ function ensureSetupItems()
     end
 end
 
--- ==========================================
--- LOGIKA PEMBUATAN RANDOM WORLD (FOTO 1 - 15)
--- ==========================================
 function setupNewRandomWorld()
     if not autoDF_running then return false end
     if hasWorldLock() then
@@ -611,7 +539,6 @@ function setupNewRandomWorld()
     local doorX, doorY = findMainDoor()
     LogToConsole("`w[`0Setup`w] Membangun Enclosure Dirt Farm di sekitar Main Door...")
 
-    -- 1. Bersihkan tile atas Main Door jika ada blok terhalang
     if safeTile(doorX, doorY - 1).fg ~= 0 and safeTile(doorX, doorY - 1).fg ~= WorldLockID then
         walkTo(doorX, doorY, 2000)
         local timeout = 0
@@ -622,7 +549,6 @@ function setupNewRandomWorld()
         end
     end
 
-    -- 2. Pasang Lock di (X, Y-1) [Foto 2]
     if inv(WorldLockID) > 0 and safeTile(doorX, doorY - 1).fg == 0 then
         walkTo(doorX, doorY, 2000)
         Sleep(300)
@@ -635,7 +561,6 @@ function setupNewRandomWorld()
         Sleep(300)
     end
 
-    -- 3. Pasang Entrance Kiri di (X-1, Y) [Foto 3]
     if safeTile(doorX - 1, doorY).fg ~= EntranceID and inv(EntranceID) > 0 then
         walkTo(doorX, doorY, 2000)
         if safeTile(doorX - 1, doorY).fg ~= 0 then
@@ -646,7 +571,6 @@ function setupNewRandomWorld()
         Sleep(dpc)
     end
 
-    -- 4. Pasang Entrance Kanan di (X+1, Y) [Foto 4]
     if safeTile(doorX + 1, doorY).fg ~= EntranceID and inv(EntranceID) > 0 then
         walkTo(doorX, doorY, 2000)
         if safeTile(doorX + 1, doorY).fg ~= 0 then
@@ -657,48 +581,40 @@ function setupNewRandomWorld()
         Sleep(dpc)
     end
 
-    -- 5. Pasang Dirt Pembungkus Kiri Atas (X-1, Y-1) [Foto 5]
     if safeTile(doorX - 1, doorY - 1).fg == 0 and inv(2) > 0 then
         trh1_3(doorX - 1, doorY - 1, 2)
         Sleep(dpc)
     end
 
-    -- 6. Pasang Dirt Pembungkus Kanan Atas (X+1, Y-1) [Foto 6]
     if safeTile(doorX + 1, doorY - 1).fg == 0 and inv(2) > 0 then
         trh1_3(doorX + 1, doorY - 1, 2)
         Sleep(dpc)
     end
 
-    -- 7. Break Dirt Bawah Kanan (X+1, Y+1) [Foto 7]
     if safeTile(doorX + 1, doorY + 1).fg ~= 0 and not isUnbreakable(safeTile(doorX + 1, doorY + 1).fg) then
         tnjk1_3(doorX + 1, doorY + 1)
         Sleep(dbk + math.random(10, 20))
     end
 
-    -- 8. Break Dirt Bawah Kiri (X-1, Y+1) [Foto 8]
     if safeTile(doorX - 1, doorY + 1).fg ~= 0 and not isUnbreakable(safeTile(doorX - 1, doorY + 1).fg) then
         tnjk1_3(doorX - 1, doorY + 1)
         Sleep(dbk + math.random(10, 20))
     end
 
-    -- 9. Turun / Jalan ke (X+1, Y+1) [Foto 9]
     walkTo(doorX + 1, doorY + 1, 2000)
     Sleep(300)
 
-    -- 10. Pasang Entrance di (X+1, Y+1) [Foto 10]
     if safeTile(doorX + 1, doorY + 1).fg == 0 and inv(EntranceID) > 0 then
         trh1_3(doorX + 1, doorY + 1, EntranceID)
         Sleep(dpc)
     end
 
-    -- 11 & 12. Edit Door ID di (X+1, Y+1) [Foto 11 & 12]
     if safeTile(doorX + 1, doorY + 1).fg == EntranceID then
         local doorTargetID = (DFWorldDoor ~= nil and DFWorldDoor ~= "") and DFWorldDoor or "IWP2145"
         sendPacket(2, "action|dialog_return\ndialog_name|door_edit\ntilex|" .. (doorX + 1) .. "|\ntiley|" .. (doorY + 1) .. "|\ndoor_name||\ndoor_target||\ndoor_id|" .. doorTargetID)
         Sleep(500)
     end
 
-    -- 13, 14, 15. Edit Lock di (X, Y-1) untuk "Ignore empty air" [Foto 13, 14, 15]
     sendPacket(2, "action|dialog_return\ndialog_name|lock_edit\ntilex|" .. doorX .. "|\ntiley|" .. (doorY - 1) .. "|\ncheckbox_ignore_air|1")
     Sleep(500)
 
@@ -706,7 +622,6 @@ function setupNewRandomWorld()
     return true
 end
 
--- LOGIKA AUTO DROP DENGAN MENYISAKAN 50% UNTUK SEMUA ITEM
 function processAutoDropAndTrash()
     if not autoDF_running or not AutoDropEnabled then return end
 
@@ -1432,7 +1347,6 @@ function mainDF()
         LogToConsole("`4[`0Warning`4] World " .. nameworld .. " masih ada bagian belum sempurna!")
     end
 
-    -- STABILISASI MEMORI LOKAL
     collectgarbage("collect")
 end
 
@@ -1452,7 +1366,6 @@ function LoopMultiWorld()
 
         if not autoDF_running then return end
 
-        -- CIKLIS COOLING DOWN (ANTI FC) SETIAP N WORLD SELESAI
         local restThreshold = Config.RestEveryWorld or 15
         local restTime = Config.RestDuration or 15
         if worldCompletedCount > 0 and (worldCompletedCount % restThreshold == 0) then
@@ -1575,19 +1488,6 @@ local module_json = [[
             "type": "labelapp",
             "icon": "Verified",
             "text": "Script By LOLIStore"
-        },
-        {
-            "type": "divider"
-        },
-        {
-            "type": "button",
-            "text": "Apply Config (Save Setelan)",
-            "alias": "btn_apply_config"
-        },
-        {
-            "type": "button",
-            "text": "Load Config (Muat Setelan)",
-            "alias": "btn_load_config"
         },
         {
             "type": "divider"
@@ -1947,18 +1847,6 @@ function onValue(type_evt, name, value)
     elseif name == "hit_count" then Config.HitCount = math.floor(tonumber(value) or 1); HitCount = Config.HitCount
     elseif name == "autodf_delaybreak" then Config.DelayBreak = math.floor(tonumber(value) or dbk); dbk = Config.DelayBreak
     elseif name == "autodf_delayplace" then Config.DelayPlace = math.floor(tonumber(value) or dpc); dpc = Config.DelayPlace
-
-    elseif name == "btn_apply_config" then
-        applyConfig()
-        LogToConsole("`w[`2SUCCESS`w] Config berhasil disimpan & diterapkan!")
-
-    elseif name == "btn_load_config" then
-        if loadConfigFromStorage() then
-            applyConfig()
-            LogToConsole("`w[`2SUCCESS`w] Config berhasil dimuat ulang dari memori HP!")
-        else
-            LogToConsole("`4[`0Warning`4] File config tidak ditemukan atau masih kosong!")
-        end
 
     elseif name == "toggle_pos_check" then
         if value then
