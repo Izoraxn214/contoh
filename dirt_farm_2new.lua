@@ -899,7 +899,7 @@ function plntDf_122()
         end
 
         for tilex = 2, 25 do
-            if not autoDF_running then return end
+            if not autoDF_running then break end
 
             if safeTile(tilex, 25).fg == 3 and safeTile(tilex, 25).readyharvest then
                 walkTo(tilex - 1, 25, 1000)
@@ -1282,6 +1282,9 @@ function clearLeftoverSafe()
     end
 end
 
+-- ==========================================
+-- LOGIKA AUDIT WORLD (PEMINDAIAN BAWAH KE ATAS)
+-- ==========================================
 function isWorldAlreadyDone()
     Sleep(2000)
 
@@ -1289,42 +1292,39 @@ function isWorldAlreadyDone()
         return false
     end
 
-    local tiles = safeGetTiles()
-    if #tiles < 1000 then
-        return false
-    end
-
     local unclearedCount = 0
     local emptySkyCount = 0
-    local leftoverTreeCount = 0
 
-    for _, t in pairs(tiles) do
-        if t and t.x and t.y then
-            if t.y >= 24 and t.y <= 53 and t.x >= 0 and t.x <= 99 then
-                if t.bg == 14 or (t.fg ~= 0 and not isUnbreakable(t.fg)) then 
+    local dfRawBlocks = {
+        [2]  = true, -- Dirt Block
+        [4]  = true, -- Lava Block
+        [10] = true, -- Rock Block
+        [14] = true  -- Cave Block
+    }
+
+    -- Pengecekan berurutan dari lorong paling bawah (Y = 53) memanjat naik ke atas (Y = 2)
+    for tiley = 53, 2, -1 do
+        for tilex = 0, 99 do
+            local t = safeTile(tilex, tiley)
+            
+            -- 1. Lorong Bawah (Y = 24 s/d 53): Cek sisa blok & wall bawaan world
+            if tiley >= 24 then
+                if t.bg == 14 or dfRawBlocks[t.fg] then 
                     unclearedCount = unclearedCount + 1
                 end
-            end
-
-            if t.y >= 2 and t.y <= 23 and t.x >= 2 and t.x <= 97 then
-                if t.fg ~= 2 and not isUnbreakable(t.fg) then
+            
+            -- 2. Langit Atas (Y = 2 s/d 23, X = 2 s/d 97): Cek ubin kosong (FG == 0)
+            elseif tiley <= 23 and tilex >= 2 and tilex <= 97 then
+                if t.fg == 0 then
                     emptySkyCount = emptySkyCount + 1
                 end
-            end
-
-            if t.y >= 2 and t.y <= 25 and t.fg == 3 then
-                leftoverTreeCount = leftoverTreeCount + 1
             end
         end
     end
 
-    LogToConsole("`w[`0Audit World`w] Gua Kotor: `e" .. unclearedCount .. "`w | Langit Bolong: `e" .. emptySkyCount .. "`w | Pohon Sisa: `e" .. leftoverTreeCount)
+    LogToConsole("`w[`0Audit World`w] Sisa Bawah: `e" .. unclearedCount .. "`w | Langit Bolong: `e" .. emptySkyCount)
 
-    if unclearedCount > 0 or emptySkyCount > 0 or leftoverTreeCount > 0 then
-        return false
-    end
-
-    return true
+    return (unclearedCount == 0 and emptySkyCount == 0)
 end
 
 function verifyAndPatchWorld()
@@ -1463,7 +1463,7 @@ function LoopMultiWorld()
 
         if not UseRandomDF then
             index_world = index_world + 1
-            if index_world > #WorldList then index_world = 1 end
+            if index_world > #WorldList me then index_world = 1 end
         end
 
         collectgarbage("collect")
