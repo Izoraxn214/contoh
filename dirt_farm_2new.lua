@@ -17,6 +17,10 @@ Config = {
     DropCooldown = 20, -- Jeda antar drop (detik)
     KeepPercent = 0.50, -- MENYISAKAN 50% UNTUK SEMUA ITEM DI BACKPACK SAAT DROP
 
+    -- Fitur Anti FC / Stabilitas Memori
+    RestEveryWorld = 15, -- Istirahat setiap N world selesai
+    RestDuration = 15,   -- Durasi istirahat (detik)
+
     -- Slot Drop Items (8 Slots)
     ItemSlots = {
         { id = 3,  min = 190, x = 98, y = 22 }, -- Seed Dirt
@@ -70,6 +74,7 @@ Config = {
 }
 
 local CONFIG_FILE = "df_config_save.txt"
+local worldCompletedCount = 0
 
 -- ==========================================
 -- FUNGSI SAVE & LOAD CONFIG DARI HP (PERSISTENT)
@@ -88,7 +93,7 @@ function saveConfigToStorage()
     local dataStr = table.concat(lines, "\n")
     local ok, err = pcall(writeToLocal, CONFIG_FILE, dataStr)
     if ok then
-        LogToConsole("`w[`2Config Saved`w] Setelan berhasil disimpan ke memori HP!")
+        LogToConsole("`w[`2Config Saved`w] Setelan disimpan ke memori HP!")
     else
         LogToConsole("`4[`0Config Error`4] Gagal menyimpan file config!")
     end
@@ -113,7 +118,7 @@ function loadConfigFromStorage()
                 end
             end
         end
-        LogToConsole("`w[`2Config Loaded`w] Berhasil memuat setelan dari simpanan HP!")
+        LogToConsole("`w[`2Config Loaded`w] Berhasil memuat setelan lokal!")
         return true
     end
     return false
@@ -173,7 +178,6 @@ function applyConfig()
     saveConfigToStorage()
 end
 
--- BACA CONFIG LOKAL & APLIKASIKAN
 loadConfigFromStorage()
 applyConfig()
 
@@ -195,7 +199,6 @@ worldStartTime = os.time()
 
 math.randomseed(os.time())
 
--- PROTEKSI UBIN UNBREAKABLE + PLATFORM MGUI + ITEM FARMABLE
 local function isUnbreakable(fg)
     local id = tonumber(fg) or 0
     if id == 0 then return false end
@@ -212,11 +215,11 @@ local function isUnbreakable(fg)
     end
 
     local clearableDFBlocks = {
-        [2]  = true, -- Dirt Block
-        [3]  = true, -- Dirt Tree
-        [4]  = true, -- Lava Block
-        [10] = true, -- Rock Block
-        [14] = true  -- Cave Dirt
+        [2]  = true,
+        [3]  = true,
+        [4]  = true,
+        [10] = true,
+        [14] = true
     }
 
     if not clearableDFBlocks[id] then
@@ -319,7 +322,6 @@ function inv(itemID)
     return 0
 end
 
--- SMART WALKTO DENGAN AUTO-TUNNELING
 function walkTo(targetX, targetY, maxWaitMs)
     targetX = math.max(0, math.min(99, targetX))
     targetY = math.max(0, math.min(53, targetY))
@@ -665,13 +667,12 @@ function processAutoDropAndTrash()
             local jml = inv(slot.id)
             if jml >= slot.min and DropWorld ~= "" then
                 
-                -- MENYISAKAN 50% UNTUK SEMUA ITEM DI BACKPACK
                 local ratio = KeepPercent or 0.50
                 local keepAmount = math.floor(jml * ratio)
                 local dropAmount = jml - keepAmount
 
                 if dropAmount > 0 then
-                    LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Dropping 50% (" .. dropAmount .. " pcs, sisa " .. keepAmount .. " di tas) ke Storage: " .. DropWorld)
+                    LogToConsole("`w[`0Auto Drop`w] Item ID (" .. slot.id .. ") capai limit (" .. jml .. "/" .. slot.min .. "). Dropping 50% (" .. dropAmount .. " pcs) ke Storage: " .. DropWorld)
                     
                     warp(DropWorld, DropDoor)
                     Sleep(7000)
@@ -698,17 +699,12 @@ function processAutoDropAndTrash()
                         if countAfter < countBefore then
                             dropSuccess = true
                             slot.x = targetX
-                            LogToConsole("`w[`2Auto Drop Success`w] Berhasil drop di X=" .. targetX .. " Y=" .. targetY .. " (Sisa " .. inv(slot.id) .. " pcs di tas)")
+                            LogToConsole("`w[`2Auto Drop Success`w] Berhasil drop di X=" .. targetX .. " Y=" .. targetY)
                         else
-                            LogToConsole("`4[`0Drop Full`4] X=" .. targetX .. " Y=" .. targetY .. " penuh/gagal! Menunggu jeda aman & geser ke X=" .. (targetX - 1))
                             targetX = targetX - 1
                             attempts = attempts + 1
                             Sleep(1200)
                         end
-                    end
-
-                    if not dropSuccess then
-                        LogToConsole("`4[`0Warning Drop`4] Jalur drop penuh sampai 10 ubin ke kiri!")
                     end
 
                     warpDFWorld(currentWorld)
@@ -788,7 +784,7 @@ function ambilSeed(id, jumlah)
         Sleep(1000)
 
         if inv(id) <= initialAmount then
-            LogToConsole("`4[`0Warning`4] Stok Item ID (" .. id .. ") di Storage habis atau tidak ada!")
+            LogToConsole("`4[`0Warning`4] Stok Item ID (" .. id .. ") di Storage habis!")
         end
     end
 end
@@ -802,11 +798,8 @@ function plntDf_122()
     ambilSeed(2, 50)
     
     if inv(2) >= 30 then
-        LogToConsole("`w[`2Auto DF`w] Berhasil restock Dirt Block dari Storage! Stok sekarang: " .. inv(2))
         return
     end
-
-    LogToConsole("`4[`0Warning`4] Dirt Block di Storage habis! Menanam batch Dirt Seed di Y=25 sebagai cadangan...")
 
     while autoDF_running and inv(2) < 30 do
         if inv(3) == 0 then
@@ -831,10 +824,7 @@ function plntDf_122()
             end
         end
 
-        if not plantedAny then
-            LogToConsole("`4[`0Warning`4] Lorong Y=25 terisi penuh Farmable! Melanjutkan penambalan dengan stok tersisa...")
-            break
-        end
+        if not plantedAny then break end
 
         local waitTime = 0
         while autoDF_running and waitTime < 32 do
@@ -917,12 +907,8 @@ function plfS_15()
     if not autoDF_running or not PickPlat_Enabled then return end
 
     if inv(PlatformID) < 52 then
-        if StoragePlatWorld == "" then
-            LogToConsole("`4[`0Plat Error`4] Nama World Storage Platform belum diisi!")
-            return
-        end
+        if StoragePlatWorld == "" then return end
 
-        LogToConsole("`w[`0Auto DF`w] Platform kurang (" .. inv(PlatformID) .. "/52). Ambil ke Storage: " .. StoragePlatWorld)
         warp(StoragePlatWorld, StoragePlatDoor)
         Sleep(7000)
         waitForTilesToLoad()
@@ -967,12 +953,7 @@ function plfS_15()
         Sleep(1000)
     end
 
-    local currentPlatCount = inv(PlatformID)
-    LogToConsole("`w[`0Auto DF`w] Stok Platform di backpack: `e" .. currentPlatCount)
-    if currentPlatCount == 0 then
-        LogToConsole("`4[`0Warning`4] Stok Platform di backpack 0! Pemasangan platform dilewati...")
-        return
-    end
+    if inv(PlatformID) == 0 then return end
 
     for tiley = 2, 52, 2 do
         if not autoDF_running then return end
@@ -1007,7 +988,6 @@ function plfS_15()
     end
 
     Sleep(1000)
-    LogToConsole("`w[`0Auto DF`w] Platform samping selesai. Refresh warp...")
     local currentWorld = safeGetWorldName()
     if currentWorld ~= "" then
         warpDFWorld(currentWorld)
@@ -1082,6 +1062,7 @@ function clrd_down_15()
                 end
             end
         end
+        collectgarbage("step", 100)
     end
 end
 
@@ -1110,7 +1091,6 @@ function brkLv_12()
     end
 end
 
--- PENAMBALAN DIRT (HALUS, SMART-PATH, & ANTI-FREEZE)
 function plcDrt_2()
     for tiley = 24, 2, -2 do
         if not autoDF_running then return end
@@ -1162,12 +1142,12 @@ function plcDrt_2()
             end
             Sleep(50)
         end
+        collectgarbage("step", 100)
     end
 end
 
 function fillEmptyCaveTiles()
     if not autoDF_running then return end
-    LogToConsole("`w[`0Auto DF`w] Menutupi sisa ubin gua yang belum terpasang dirt...")
 
     for tiley = 24, 53 do
         if not autoDF_running then return end
@@ -1201,10 +1181,8 @@ function fillEmptyCaveTiles()
     end
 end
 
--- PANEN POHON DIRT TERTANAM (Y=2 s.d 25) & SISA ITEM
 function clearLeftoverSafe()
     if not autoDF_running then return end
-    LogToConsole("`w[`0Auto DF`w] Memanen sisa pohon dirt (Y=2 s.d 25) & membersihkan item...")
     Sleep(500)
 
     for tiley = 2, 25 do
@@ -1246,18 +1224,15 @@ function clearLeftoverSafe()
     end
 end
 
--- AUDIT BAWAH SAMPAI ATAS (FULL WORLD) DENGAN JEDA SINKRONISASI 2 DETIK
 function isWorldAlreadyDone()
     Sleep(2000)
 
     if not waitForTilesToLoad() then
-        LogToConsole("`4[`0Warning`4] Tile world belum ter-load sempurna! Memulai pengerjaan...")
         return false
     end
 
     local tiles = safeGetTiles()
     if #tiles < 1000 then
-        LogToConsole("`4[`0Warning`4] Tile terdeteksi < 1000! Memulai pengerjaan...")
         return false
     end
 
@@ -1285,7 +1260,7 @@ function isWorldAlreadyDone()
         end
     end
 
-    LogToConsole("`w[`0Audit World`w] Gua Kotor: `e" .. unclearedCount .. "`w | Langit Bukan Dirt: `e" .. emptySkyCount .. "`w | Pohon Dirt: `e" .. leftoverTreeCount)
+    LogToConsole("`w[`0Audit World`w] Gua Kotor: `e" .. unclearedCount .. "`w | Langit Bolong: `e" .. emptySkyCount .. "`w | Pohon Sisa: `e" .. leftoverTreeCount)
 
     if unclearedCount > 0 or emptySkyCount > 0 or leftoverTreeCount > 0 then
         return false
@@ -1296,7 +1271,6 @@ end
 
 function verifyAndPatchWorld()
     if not autoDF_running then return true end
-    LogToConsole("`w[`0Audit Akhir`w] Memeriksa ulang seluruh world (Bawah s.d Atas)...")
     
     local retryLimit = 1
     local currentRetry = 0
@@ -1308,7 +1282,7 @@ function verifyAndPatchWorld()
         end
         
         currentRetry = currentRetry + 1
-        LogToConsole("`4[`0Penambalan`4] Masih ada ubin bolong/sisa di world! Memulai pembersihan & penambalan ulang...")
+        LogToConsole("`4[`0Penambalan`4] Masih ada sisa/bagian bolong! Memulai penambalan ulang...")
         
         clrd_down_15()
         if not autoDF_running then return false end
@@ -1337,7 +1311,7 @@ function StopAll()
         sendPacket(2, "action|input\n|left|0\n|right|0\n|up|0\n|down|0")
         sendPacket(2, "action|input\n|space|0")
     end)
-    LogToConsole("`w[`0Auto DF`w]`4 STOP DITEKAN! Pergerakan & pengerjaan dihentikan.")
+    LogToConsole("`w[`0Auto DF`w]`4 STOP DITEKAN! Pengerjaan dihentikan.")
 end
 
 function mainDF()
@@ -1362,7 +1336,8 @@ function mainDF()
     if not autoDF_running then return end
 
     if isWorldAlreadyDone() then 
-        LogToConsole("`w[`0Auto DF`w] World " .. nameworld .. " SUDAH BERSIH / SELESAI! Memotong ke world berikutnya...")
+        LogToConsole("`w[`0Auto DF`w] World " .. nameworld .. " SUDAH BERSIH! Pindah world...")
+        collectgarbage("collect")
         return 
     end
 
@@ -1394,10 +1369,13 @@ function mainDF()
 
     if verifyAndPatchWorld() then
         writeToLocal("finished_df.txt", os.date("[%Y-%m-%d %H:%M] ") .. nameworld .. "\n")
-        LogToConsole("`w[`2SUCCESS`w] World " .. nameworld .. " selesai & dicatat ke finished_df.txt!")
+        LogToConsole("`w[`2SUCCESS`w] World " .. nameworld .. " selesai & dicatat!")
     else
-        LogToConsole("`4[`0Warning`4] World " .. nameworld .. " masih ada bagian belum tertutup sempurna setelah penambalan!")
+        LogToConsole("`4[`0Warning`4] World " .. nameworld .. " masih ada bagian belum sempurna!")
     end
+
+    -- STABILISASI MEMORI LOKAL
+    collectgarbage("collect")
 end
 
 function LoopMultiWorld()
@@ -1411,14 +1389,27 @@ function LoopMultiWorld()
 
         if nameworld then
             mainDF()
+            worldCompletedCount = worldCompletedCount + 1
         end
 
         if not autoDF_running then return end
+
+        -- CIKLIS COOLING DOWN (ANTI FC) SETIAP N WORLD SELESAI
+        local restThreshold = Config.RestEveryWorld or 15
+        local restTime = Config.RestDuration or 15
+        if worldCompletedCount > 0 and (worldCompletedCount % restThreshold == 0) then
+            LogToConsole("`w[`0Cooling Down`w] Telah merapikan " .. worldCompletedCount .. " world. Istirahat " .. restTime .. " detik untuk menyegarkan VRAM...")
+            collectgarbage("collect")
+            Sleep(restTime * 1000)
+        end
+
         if not UseRandomDF then
             index_world = index_world + 1
             if index_world > #WorldList then index_world = 1 end
         end
-        Sleep(2000)
+
+        collectgarbage("collect")
+        Sleep(3000)
     end
 end
 
