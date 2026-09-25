@@ -2,38 +2,58 @@ local Preferences = require("preferences")
 local pref = Preferences:new("rotasi_lolistore_config.json")
 
 local config = {
-    block_id           = pref:get("block_id",           0),
-    pnb_x              = pref:get("pnb_x",              0),
-    pnb_y              = pref:get("pnb_y",              0),
-    high_trigger       = pref:get("high_trigger",        180),
-    low_trigger        = pref:get("low_trigger",         10),
-    farm_world         = pref:get("farm_world",         ""),
-    farm_door          = pref:get("farm_door",          ""),
-    drop_world         = pref:get("drop_world",         ""),
-    drop_door          = pref:get("drop_door",          ""),
-    drop_item_id       = pref:get("drop_item_id",       0),
-    min_drop_amt       = pref:get("min_drop_amt",       20),
-    drop_x             = pref:get("drop_x",             0),
-    drop_y             = pref:get("drop_y",             0),
-    marker_id          = pref:get("marker_id",           1422),
-    enable_anti_player = pref:get("enable_anti_player", true),
-    anti_player_cd     = pref:get("anti_player_cd",     120),
-    enable_fly         = pref:get("enable_fly",         true),
-    work_min           = pref:get("work_min",           45),
-    rest_min           = pref:get("rest_min",           10),
-    enable_jitter      = pref:get("enable_jitter",      false),
-    show_punch         = pref:get("show_punch",         true),
+    block_id             = pref:get("block_id",             0),
+    search_name          = pref:get("search_name",          ""),
+    pnb_x                = pref:get("pnb_x",                0),
+    pnb_y                = pref:get("pnb_y",                0),
+    pnb_mode             = pref:get("pnb_mode",             1),
     
-    delay_place        = pref:get("delay_place",        120),
-    delay_punch        = pref:get("delay_punch",        140),
-    delay_harvest      = pref:get("delay_harvest",      180),
-    delay_plant        = pref:get("delay_plant",        120),
-    enable_safe_delay  = pref:get("enable_safe_delay",  true),
-    enable_smart_delay = pref:get("enable_smart_delay", true),
-    enable_anti_miss   = pref:get("enable_anti_miss",   true),
+    -- AUTOFARM SETTINGS
+    enable_verify_punch  = pref:get("enable_verify_punch",  true),
+    enable_break         = pref:get("enable_break",         true),
+    enable_place         = pref:get("enable_place",         true),
+    hit_count            = pref:get("hit_count",            1),
+    faster_break         = pref:get("faster_break",         false),
+    
+    -- DROP SEED/BLOCK UTAMA
+    high_trigger         = pref:get("high_trigger",          180),
+    low_trigger          = pref:get("low_trigger",           10),
+    farm_world           = pref:get("farm_world",           ""),
+    farm_door            = pref:get("farm_door",            ""),
+    drop_world           = pref:get("drop_world",           ""),
+    drop_door            = pref:get("drop_door",            ""),
+    drop_item_id         = pref:get("drop_item_id",         0),
+    min_drop_amt         = pref:get("min_drop_amt",         20),
+    drop_x               = pref:get("drop_x",               0),
+    drop_y               = pref:get("drop_y",               0),
+    
+    -- TRASH / EXTRA ITEM DROP CONFIG (PRE-FILLED WITH CHI & DAILY DROPS)
+    enable_trash_drop    = pref:get("enable_trash_drop",    true),
+    trash_item_ids       = pref:get("trash_item_ids",       "1120,1122,1124,1126,1362,1210,1422,1294,818,356,1364,226"),
+    trash_drop_world     = pref:get("trash_drop_world",     ""),
+    trash_drop_door      = pref:get("trash_drop_door",      ""),
+    trash_drop_x         = pref:get("trash_drop_x",         0),
+    trash_drop_y         = pref:get("trash_drop_y",         0),
 
-    pnb_timeout        = 4000,
-    pnb_retry          = 3,
+    -- SECURITY & DELAY
+    enable_anti_player   = pref:get("enable_anti_player",   true),
+    anti_player_cd       = pref:get("anti_player_cd",       120),
+    enable_fly           = pref:get("enable_fly",           true),
+    work_min             = pref:get("work_min",             45),
+    rest_min             = pref:get("rest_min",             10),
+    enable_jitter        = pref:get("enable_jitter",        false),
+    show_punch           = pref:get("show_punch",           true),
+    
+    delay_place          = pref:get("delay_place",          80),
+    delay_punch          = pref:get("delay_punch",          180),
+    delay_harvest        = pref:get("delay_harvest",        180),
+    delay_plant          = pref:get("delay_plant",          120),
+    enable_safe_delay    = pref:get("enable_safe_delay",    true),
+    enable_smart_delay   = pref:get("enable_smart_delay",   true),
+    enable_anti_miss     = pref:get("enable_anti_miss",     true),
+
+    pnb_timeout          = 4000,
+    pnb_retry            = 3,
 }
 
 local seed_id            = 0
@@ -51,8 +71,8 @@ local current_rest_sec   = 0
 local farm_world_list    = {}
 local current_farm_index = 1
 
--- Forward Declaration
 local doDrop
+local doTrashDrop
 
 local function Log(msg)
     LogToConsole("`5[LoliStore 24/7] `0" .. tostring(msg))
@@ -80,12 +100,35 @@ local function isThreadActive(my_id)
     return running and not reconnecting and (thread_instance == my_id)
 end
 
--- LOGIKA PRIORITAS DROP (INTERUPSI LANGSUNG)
+local function parseIdList(raw_str)
+    local result = {}
+    if not raw_str or raw_str == "" then return result end
+    for id_str in string.gmatch(raw_str, "([^,%s]+)") do
+        local id_num = tonumber(id_str)
+        if id_num then
+            table.insert(result, id_num)
+        end
+    end
+    return result
+end
+
 local function checkPriorityDrop(my_id)
     if not isThreadActive(my_id) then return false end
+
+    if config.enable_trash_drop then
+        local trash_list = parseIdList(config.trash_item_ids)
+        for _, t_id in ipairs(trash_list) do
+            if invCount(t_id) > 0 then
+                Log("`3[TRASH DROP] Item sampah/extra terdeteksi (ID: " .. t_id .. " | Jumlah: " .. invCount(t_id) .. "). Langsung drop!`0")
+                doTrashDrop(my_id, t_id)
+                return true
+            end
+        end
+    end
+
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
     if invCount(target_item) >= config.high_trigger then
-        Log("`3[PRIORITY DROP] Item penuh/mencapai target (" .. invCount(target_item) .. "). Langsung drop dulu!`0")
+        Log("`3[PRIORITY DROP] Item penuh (" .. invCount(target_item) .. "). Langsung drop dulu!`0")
         doDrop(my_id)
         return true
     end
@@ -300,21 +343,36 @@ local function safeGetObjects()
 end
 
 local function punchTile(tx, ty)
+    if not config.enable_break then return end
     local p = getPlayer()
     if not p then return end
-    sendPacketRaw(not config.show_punch, {
-        type  = 3,
-        value = 18,
-        x     = p.posX,
-        y     = p.posY,
-        px    = tx,
-        py    = ty
-    })
-    updateActionTime()
-    ActionSleep(config.delay_punch)
+
+    if config.enable_verify_punch then
+        local tile = safeGetTile(tx, ty)
+        if not tile or (config.block_id > 0 and tile.fg ~= config.block_id) then
+            return
+        end
+    end
+
+    local hits = math.max(1, config.hit_count or 1)
+    for h = 1, hits do
+        sendPacketRaw(not config.show_punch, {
+            type  = 3,
+            value = 18,
+            x     = p.posX,
+            y     = p.posY,
+            px    = tx,
+            py    = ty
+        })
+        updateActionTime()
+
+        local delay = config.faster_break and math.max(80, config.delay_punch - 40) or config.delay_punch
+        ActionSleep(delay)
+    end
 end
 
 local function placeBlock(tx, ty, item_id, is_plant)
+    if not config.enable_place then return end
     local p = getPlayer()
     if not p then return end
     sendPacketRaw(not config.show_punch, {
@@ -401,6 +459,7 @@ local function getPlantableTiles()
 end
 
 local function doPlant(my_id)
+    if not config.enable_place then return end
     if invCount(seed_id) < config.low_trigger then return end
 
     local plant_tiles = getPlantableTiles()
@@ -471,6 +530,36 @@ local function doHarvestLoop(my_id)
             end
         end
     end
+end
+
+doTrashDrop = function(my_id, item_id)
+    local count = invCount(item_id)
+    if count <= 0 then return end
+
+    local target_trash_world = (config.trash_drop_world and config.trash_drop_world ~= "") and config.trash_drop_world or getCurrentFarmWorld()
+    local ok_warp = warpToWorld(target_trash_world, config.trash_drop_door, my_id, true)
+    
+    if not ok_warp then
+        Log("Gagal warp ke Trash Storage World!")
+        return
+    end
+
+    if not isThreadActive(my_id) then return end
+
+    local try_x = config.trash_drop_x
+    local try_y = config.trash_drop_y
+
+    walkTo(try_x, try_y)
+    Sleep(300)
+
+    sendPacket(2, "action|drop\nitemID|" .. item_id .. "\n")
+    Sleep(200)
+    sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. item_id .. "|\ncount|" .. count .. "\n")
+    Sleep(300)
+
+    Log("TRASH DROP Berhasil! Item ID: " .. item_id .. " (" .. count .. " pcs) di X=" .. try_x .. ", Y=" .. try_y)
+    
+    warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
 end
 
 doDrop = function(my_id)
@@ -544,25 +633,37 @@ doDrop = function(my_id)
 end
 
 local function getPnbTargets(cx, cy)
-    local target_y = cy - 1
-    return {
-        {x = cx - 2, y = target_y},
-        {x = cx - 1, y = target_y},
-        {x = cx,     y = target_y},
-        {x = cx + 1, y = target_y},
-        {x = cx + 2, y = target_y},
-    }
+    local mode = config.pnb_mode or 1
+    if mode == 2 then
+        return {
+            {x = cx - 1, y = cy - 1},
+            {x = cx,     y = cy - 1},
+            {x = cx + 1, y = cy - 1},
+        }
+    elseif mode == 3 then
+        return {
+            {x = cx, y = cy + 1},
+            {x = cx, y = cy + 2},
+        }
+    else
+        return {
+            {x = cx - 2, y = cy - 1},
+            {x = cx - 1, y = cy - 1},
+            {x = cx,     y = cy - 1},
+            {x = cx + 1, y = cy - 1},
+            {x = cx + 2, y = cy - 1},
+        }
+    end
 end
 
 local function doPnb(my_id)
-    Log("START PNB (5-Tile Horizontal)")
+    Log("START PNB (Mode: " .. config.pnb_mode .. ")")
     walkTo(config.pnb_x, config.pnb_y)
     Sleep(300)
 
     while isThreadActive(my_id) do
         if not checkAntiPlayer(my_id) then return end
         
-        -- PRIORITY DROP CHECK SAAT PNB
         if checkPriorityDrop(my_id) then
             walkTo(config.pnb_x, config.pnb_y)
             Sleep(300)
@@ -582,25 +683,29 @@ local function doPnb(my_id)
 
         local targets = getPnbTargets(cx, cy)
 
-        for _, t in ipairs(targets) do
-            if not isThreadActive(my_id) then return end
-            if invCount(config.block_id) <= 0 then break end
-            local tile = safeGetTile(t.x, t.y)
-            if tile and tile.fg == 0 then
-                placeBlock(t.x, t.y, config.block_id, false)
+        if config.enable_place then
+            for _, t in ipairs(targets) do
+                if not isThreadActive(my_id) then return end
+                if invCount(config.block_id) <= 0 then break end
+                local tile = safeGetTile(t.x, t.y)
+                if tile and tile.fg == 0 then
+                    placeBlock(t.x, t.y, config.block_id, false)
+                end
             end
         end
 
-        while isThreadActive(my_id) do
-            local all_broken = true
-            for _, t in ipairs(targets) do
-                local cur = safeGetTile(t.x, t.y)
-                if cur and cur.fg ~= 0 then
-                    all_broken = false
-                    punchTile(t.x, t.y)
+        if config.enable_break then
+            while isThreadActive(my_id) do
+                local all_broken = true
+                for _, t in ipairs(targets) do
+                    local cur = safeGetTile(t.x, t.y)
+                    if cur and cur.fg ~= 0 then
+                        all_broken = false
+                        punchTile(t.x, t.y)
+                    end
                 end
+                if all_broken then break end
             end
-            if all_broken then break end
         end
 
         collectNearby()
@@ -614,7 +719,6 @@ local function processCurrentWorld(my_id)
         applyModFly()
         checkWatchdog(my_id)
 
-        -- PRIORITAS UTAMA DROP
         checkPriorityDrop(my_id)
 
         local ready_tiles = getReadyHarvestTiles()
@@ -747,33 +851,46 @@ ui:addLabelApp("AUTO ROTASI 24/7 BY LOLISTORE", "Ability")
 ui:addDivider()
 
 local dialog_main = ui:addDialog("Main Config", "Setting utama rotasi", {})
-ui:addChildInputString(dialog_main.menu, "Farm World",    config.farm_world,   "World", "FARM1,FARM2,FARM3 (pisahkan koma)", "World",    "farm_world")
-ui:addChildInputString(dialog_main.menu, "Farm Door",     config.farm_door,    "ID",    "ID door universal world farm",       "World",    "farm_door")
-ui:addChildInputInt(dialog_main.menu,    "Block ID",      config.block_id,     "ID",    "ID block (bukan seed)",              "Verified", "block_id")
-ui:addChildInputInt(dialog_main.menu,    "High Trigger",  config.high_trigger, "amt",   "item>=ini->Drop (def:180)",          "Verified", "high_trigger")
-ui:addChildInputInt(dialog_main.menu,    "Low Trigger",   config.low_trigger,  "amt",   "block/seed<=ini->stop (def:10)",     "Verified", "low_trigger")
+ui:addChildInputString(dialog_main.menu, "Search Item Name", config.search_name, "Nama", "Contoh: pepper / chand", "Search", "search_name")
+ui:addChildButton(dialog_main.menu,      "🔍 Search Item in Inventory", "btn_search_item")
+ui:addChildButton(dialog_main.menu,      "✋ Pick Item in Hand",        "btn_pick_hand")
+ui:addChildInputInt(dialog_main.menu,    "Block ID (Auto)",  config.block_id,     "ID",    "ID block (terisi otomatis)",         "Verified", "block_id")
+ui:addChildInputString(dialog_main.menu, "Farm World",       config.farm_world,   "World", "FARM1,FARM2 (pisahkan koma)",        "World",    "farm_world")
+ui:addChildInputString(dialog_main.menu, "Farm Door",        config.farm_door,    "ID",    "ID door universal world farm",       "World",    "farm_door")
+ui:addChildInputInt(dialog_main.menu,    "High Trigger",     config.high_trigger, "amt",   "item>=ini->Drop (def:180)",          "Verified", "high_trigger")
+ui:addChildInputInt(dialog_main.menu,    "Low Trigger",      config.low_trigger,  "amt",   "block/seed<=ini->stop (def:10)",     "Verified", "low_trigger")
 
 ui:addDivider()
 
-local dialog_delay = ui:addDialog("Delay & Speed Settings", "Pengaturan kecepatan aksi (dalam ms)", {})
-ui:addChildInputInt(dialog_delay.menu, "Place Delay (ms)",   config.delay_place,        "ms", "Delay menaruh block (def: 120)", "Verified", "delay_place")
-ui:addChildInputInt(dialog_delay.menu, "Punch Delay (ms)",   config.delay_punch,        "ms", "Delay memukul ubin (def: 140)",  "Verified", "delay_punch")
+local dialog_autofarm = ui:addDialog("Autofarm Setting", "Settings for autofarm (Break & Place)", {})
+ui:addChildToggle(dialog_autofarm.menu,   "Verify before punch", config.enable_verify_punch, "enable_verify_punch")
+ui:addChildToggle(dialog_autofarm.menu,   "Break",               config.enable_break,        "enable_break")
+ui:addChildToggle(dialog_autofarm.menu,   "Place",               config.enable_place,        "enable_place")
+ui:addChildInputInt(dialog_autofarm.menu, "Hit Count",           config.hit_count,           "cnt", "Pukulan per siklus (def:1)", "Verified", "hit_count")
+
+ui:addDivider()
+
+local dialog_pnb = ui:addDialog("PnB Position & Mode", "Pengaturan lokasi & ubin pecah PnB", {})
+ui:addChildInputInt(dialog_pnb.menu, "PnB X", config.pnb_x, "X", "koordinat X", "Verified", "pnb_x")
+ui:addChildInputInt(dialog_pnb.menu, "PnB Y", config.pnb_y, "Y", "koordinat Y", "Verified", "pnb_y")
+ui:addChildButton(dialog_pnb.menu, "Set dari posisi sekarang", "btn_pnb_set")
+ui:addChildInputInt(dialog_pnb.menu, "Break Pattern Mode", config.pnb_mode, "Mode", "1: 5-Tile Top | 2: 3-Tile Top | 3: 2-Tile Bottom", "Verified", "pnb_mode")
+
+ui:addDivider()
+
+local dialog_delay = ui:addDialog("Delay & Speed Settings", "Pengaturan kecepatan aksi (ms)", {})
+ui:addChildInputInt(dialog_delay.menu, "Delay Break (ms)",   config.delay_punch,        "ms", "Delay memukul block (def: 180)", "Verified", "delay_punch")
+ui:addChildInputInt(dialog_delay.menu, "Delay Place (ms)",   config.delay_place,        "ms", "Delay menaruh block (def: 80)",   "Verified", "delay_place")
 ui:addChildInputInt(dialog_delay.menu, "Harvest Delay (ms)", config.delay_harvest,      "ms", "Delay memanen pohon (def: 180)", "Verified", "delay_harvest")
 ui:addChildInputInt(dialog_delay.menu, "Plant Delay (ms)",   config.delay_plant,        "ms", "Delay menanam seed (def: 120)",  "Verified", "delay_plant")
+ui:addChildToggle(dialog_delay.menu,   "Faster Break (Turbo)", config.faster_break,      "faster_break")
 ui:addChildToggle(dialog_delay.menu,   "Safe Delay Guard",   config.enable_safe_delay,  "enable_safe_delay")
 ui:addChildToggle(dialog_delay.menu,   "Smart Delay",        config.enable_smart_delay, "enable_smart_delay")
 ui:addChildToggle(dialog_delay.menu,   "Anti Miss (Wait)",   config.enable_anti_miss,   "enable_anti_miss")
 
 ui:addDivider()
 
-local dialog_pnb = ui:addDialog("PnB Position", "Berdiri di posisi PnB dulu sebelum set", {})
-ui:addChildInputInt(dialog_pnb.menu, "PnB X", config.pnb_x, "X", "koordinat X", "Verified", "pnb_x")
-ui:addChildInputInt(dialog_pnb.menu, "PnB Y", config.pnb_y, "Y", "koordinat Y", "Verified", "pnb_y")
-ui:addChildButton(dialog_pnb.menu, "Set dari posisi sekarang", "btn_pnb_set")
-
-ui:addDivider()
-
-local dialog_drop = ui:addDialog("Drop Config", "Posisi & World drop item", {})
+local dialog_drop = ui:addDialog("Seed / Block Drop Config", "Posisi & World drop seed/block utama", {})
 ui:addChildInputString(dialog_drop.menu, "Drop World",      config.drop_world,   "World", "World tempat drop (kosongkan jika sama)", "World",    "drop_world")
 ui:addChildInputString(dialog_drop.menu, "Drop Door",       config.drop_door,    "ID",     "ID door world drop",                      "World",    "drop_door")
 ui:addChildInputInt(dialog_drop.menu,    "Drop Item ID",    config.drop_item_id, "ID",     "ID item yang di-drop (0 = otomatis seed)", "Verified", "drop_item_id")
@@ -781,6 +898,17 @@ ui:addChildInputInt(dialog_drop.menu,    "Minimal Drop Amt", config.min_drop_amt
 ui:addChildInputInt(dialog_drop.menu,    "Drop X",          config.drop_x,       "X",      "koordinat X drop",                        "Verified", "drop_x")
 ui:addChildInputInt(dialog_drop.menu,    "Drop Y",          config.drop_y,       "Y",      "koordinat Y drop",                        "Verified", "drop_y")
 ui:addChildButton(dialog_drop.menu, "Set dari posisi sekarang", "btn_drop_set")
+
+ui:addDivider()
+
+local dialog_trash = ui:addDialog("Trash / Extra Items Drop", "Drop item sampah (Chi, Essence, Daily Drops)", {})
+ui:addChildToggle(dialog_trash.menu,      "Enable Auto Trash Drop", config.enable_trash_drop, "enable_trash_drop")
+ui:addChildInputString(dialog_trash.menu, "Trash Item IDs",        config.trash_item_ids,    "IDs", "1120,1122,1124 (pisahkan koma)",  "Verified", "trash_item_ids")
+ui:addChildInputString(dialog_trash.menu, "Trash Drop World",      config.trash_drop_world,  "World", "World khusus drop trash (kosong = world skrg)", "World", "trash_drop_world")
+ui:addChildInputString(dialog_trash.menu, "Trash Drop Door",       config.trash_drop_door,   "ID", "Door ID trash world", "World", "trash_drop_door")
+ui:addChildInputInt(dialog_trash.menu,    "Trash Drop X",           config.trash_drop_x,      "X", "Koordinat X drop trash", "Verified", "trash_drop_x")
+ui:addChildInputInt(dialog_trash.menu,    "Trash Drop Y",           config.trash_drop_y,      "Y", "Koordinat Y drop trash", "Verified", "trash_drop_y")
+ui:addChildButton(dialog_trash.menu, "Set Trash Posisi Sekarang", "btn_trash_set")
 
 ui:addDivider()
 
@@ -799,33 +927,48 @@ ui:addDivider()
 ui:addToggleButton("Start / Stop", false, "btn_start")
 
 local temp = {
-    block_id           = tostring(config.block_id),
-    high_trigger       = tostring(config.high_trigger),
-    low_trigger        = tostring(config.low_trigger),
-    farm_world         = config.farm_world,
-    farm_door          = config.farm_door,
-    drop_world         = config.drop_world,
-    drop_door          = config.drop_door,
-    drop_item_id       = tostring(config.drop_item_id),
-    min_drop_amt       = tostring(config.min_drop_amt),
-    pnb_x              = tostring(config.pnb_x),
-    pnb_y              = tostring(config.pnb_y),
-    drop_x             = tostring(config.drop_x),
-    drop_y             = tostring(config.drop_y),
-    enable_anti_player = config.enable_anti_player,
-    anti_player_cd     = tostring(config.anti_player_cd),
-    enable_fly         = config.enable_fly,
-    show_punch         = config.show_punch,
-    work_min           = tostring(config.work_min),
-    rest_min           = tostring(config.rest_min),
-    enable_jitter      = config.enable_jitter,
-    delay_place        = tostring(config.delay_place),
-    delay_punch        = tostring(config.delay_punch),
-    delay_harvest      = tostring(config.delay_harvest),
-    delay_plant        = tostring(config.delay_plant),
-    enable_safe_delay  = config.enable_safe_delay,
-    enable_smart_delay = config.enable_smart_delay,
-    enable_anti_miss   = config.enable_anti_miss,
+    block_id            = tostring(config.block_id),
+    search_name         = config.search_name,
+    high_trigger        = tostring(config.high_trigger),
+    low_trigger         = tostring(config.low_trigger),
+    farm_world          = config.farm_world,
+    farm_door           = config.farm_door,
+    drop_world          = config.drop_world,
+    drop_door           = config.drop_door,
+    drop_item_id        = tostring(config.drop_item_id),
+    min_drop_amt        = tostring(config.min_drop_amt),
+    pnb_x               = tostring(config.pnb_x),
+    pnb_y               = tostring(config.pnb_y),
+    pnb_mode            = tostring(config.pnb_mode),
+    enable_verify_punch = config.enable_verify_punch,
+    enable_break        = config.enable_break,
+    enable_place        = config.enable_place,
+    hit_count           = tostring(config.hit_count),
+    faster_break        = config.faster_break,
+    drop_x              = tostring(config.drop_x),
+    drop_y              = tostring(config.drop_y),
+    
+    enable_trash_drop   = config.enable_trash_drop,
+    trash_item_ids      = config.trash_item_ids,
+    trash_drop_world    = config.trash_drop_world,
+    trash_drop_door     = config.trash_drop_door,
+    trash_drop_x        = tostring(config.trash_drop_x),
+    trash_drop_y        = tostring(config.trash_drop_y),
+
+    enable_anti_player  = config.enable_anti_player,
+    anti_player_cd      = tostring(config.anti_player_cd),
+    enable_fly          = config.enable_fly,
+    show_punch          = config.show_punch,
+    work_min            = tostring(config.work_min),
+    rest_min            = tostring(config.rest_min),
+    enable_jitter       = config.enable_jitter,
+    delay_place         = tostring(config.delay_place),
+    delay_punch         = tostring(config.delay_punch),
+    delay_harvest       = tostring(config.delay_harvest),
+    delay_plant         = tostring(config.delay_plant),
+    enable_safe_delay   = config.enable_safe_delay,
+    enable_smart_delay  = config.enable_smart_delay,
+    enable_anti_miss    = config.enable_anti_miss,
 }
 
 function OnDraw(d)
@@ -837,33 +980,99 @@ function OnDraw(d)
 end
 
 function OnValue(type, name, value)
-    if     name == "block_id"           then temp.block_id           = tostring(value)
-    elseif name == "high_trigger"       then temp.high_trigger       = tostring(value)
-    elseif name == "low_trigger"        then temp.low_trigger        = tostring(value)
-    elseif name == "farm_world"         then temp.farm_world         = value
-    elseif name == "farm_door"          then temp.farm_door          = value
-    elseif name == "drop_world"         then temp.drop_world         = value
-    elseif name == "drop_door"          then temp.drop_door          = value
-    elseif name == "drop_item_id"       then temp.drop_item_id       = tostring(value)
-    elseif name == "min_drop_amt"       then temp.min_drop_amt       = tostring(value)
-    elseif name == "pnb_x"              then temp.pnb_x              = tostring(value)
-    elseif name == "pnb_y"              then temp.pnb_y              = tostring(value)
-    elseif name == "drop_x"             then temp.drop_x             = tostring(value)
-    elseif name == "drop_y"             then temp.drop_y             = tostring(value)
-    elseif name == "enable_anti_player" then temp.enable_anti_player = value
-    elseif name == "anti_player_cd"     then temp.anti_player_cd     = tostring(value)
-    elseif name == "enable_fly"         then temp.enable_fly         = value
-    elseif name == "show_punch"         then temp.show_punch         = value
-    elseif name == "work_min"           then temp.work_min           = tostring(value)
-    elseif name == "rest_min"           then temp.rest_min           = tostring(value)
-    elseif name == "enable_jitter"      then temp.enable_jitter      = value
-    elseif name == "delay_place"        then temp.delay_place        = tostring(value)
-    elseif name == "delay_punch"        then temp.delay_punch        = tostring(value)
-    elseif name == "delay_harvest"      then temp.delay_harvest      = tostring(value)
-    elseif name == "delay_plant"        then temp.delay_plant        = tostring(value)
-    elseif name == "enable_safe_delay"  then temp.enable_safe_delay  = value
-    elseif name == "enable_smart_delay" then temp.enable_smart_delay = value
-    elseif name == "enable_anti_miss"   then temp.enable_anti_miss   = value
+    if     name == "block_id"            then temp.block_id            = tostring(value)
+    elseif name == "search_name"         then temp.search_name         = value
+    elseif name == "high_trigger"        then temp.high_trigger        = tostring(value)
+    elseif name == "low_trigger"         then temp.low_trigger         = tostring(value)
+    elseif name == "farm_world"          then temp.farm_world          = value
+    elseif name == "farm_door"           then temp.farm_door           = value
+    elseif name == "drop_world"          then temp.drop_world          = value
+    elseif name == "drop_door"           then temp.drop_door           = value
+    elseif name == "drop_item_id"        then temp.drop_item_id        = tostring(value)
+    elseif name == "min_drop_amt"        then temp.min_drop_amt        = tostring(value)
+    elseif name == "pnb_x"               then temp.pnb_x               = tostring(value)
+    elseif name == "pnb_y"               then temp.pnb_y               = tostring(value)
+    elseif name == "pnb_mode"            then temp.pnb_mode            = tostring(value)
+    elseif name == "enable_verify_punch" then temp.enable_verify_punch = value
+    elseif name == "enable_break"        then temp.enable_break        = value
+    elseif name == "enable_place"        then temp.enable_place        = value
+    elseif name == "hit_count"           then temp.hit_count           = tostring(value)
+    elseif name == "faster_break"        then temp.faster_break        = value
+    elseif name == "drop_x"              then temp.drop_x              = tostring(value)
+    elseif name == "drop_y"              then temp.drop_y              = tostring(value)
+    
+    elseif name == "enable_trash_drop"   then temp.enable_trash_drop   = value
+    elseif name == "trash_item_ids"      then temp.trash_item_ids      = value
+    elseif name == "trash_drop_world"    then temp.trash_drop_world    = value
+    elseif name == "trash_drop_door"     then temp.trash_drop_door     = value
+    elseif name == "trash_drop_x"        then temp.trash_drop_x        = tostring(value)
+    elseif name == "trash_drop_y"        then temp.trash_drop_y        = tostring(value)
+
+    elseif name == "enable_anti_player"  then temp.enable_anti_player  = value
+    elseif name == "anti_player_cd"      then temp.anti_player_cd      = tostring(value)
+    elseif name == "enable_fly"          then temp.enable_fly          = value
+    elseif name == "show_punch"          then temp.show_punch          = value
+    elseif name == "work_min"            then temp.work_min            = tostring(value)
+    elseif name == "rest_min"            then temp.rest_min            = tostring(value)
+    elseif name == "enable_jitter"       then temp.enable_jitter       = value
+    elseif name == "delay_place"         then temp.delay_place         = tostring(value)
+    elseif name == "delay_punch"         then temp.delay_punch         = tostring(value)
+    elseif name == "delay_harvest"       then temp.delay_harvest       = tostring(value)
+    elseif name == "delay_plant"         then temp.delay_plant         = tostring(value)
+    elseif name == "enable_safe_delay"   then temp.enable_safe_delay   = value
+    elseif name == "enable_smart_delay"  then temp.enable_smart_delay  = value
+    elseif name == "enable_anti_miss"    then temp.enable_anti_miss    = value
+
+    elseif name == "btn_search_item" then
+        local query = string.lower(temp.search_name or "")
+        if query == "" then
+            growtopia.notify("Ketik nama item dulu di kolom Search!")
+            return
+        end
+
+        local ok, inv = pcall(getInventory)
+        if ok and type(inv) == "table" then
+            for _, item in pairs(inv) do
+                local info = (getItemInfo and pcall(getItemInfo, item.id)) and getItemInfo(item.id) or nil
+                local item_name = info and string.lower(info.name or "") or ""
+                
+                if string.find(item_name, query) then
+                    config.block_id = item.id
+                    seed_id         = item.id + 1
+                    temp.block_id   = tostring(item.id)
+                    
+                    pref:set("block_id", config.block_id)
+                    pref:save()
+                    editValue("block_id", config.block_id)
+                    
+                    growtopia.notify("Ketemu! " .. (info.name or "Item") .. " (ID: " .. item.id .. ")")
+                    Log("Search berhasil! Block ID set ke: " .. item.id .. ", Seed ID: " .. seed_id)
+                    return
+                end
+            end
+        end
+        growtopia.notify("Item '" .. query .. "' tidak ditemukan di Inventory!")
+
+    elseif name == "btn_pick_hand" then
+        local ok, inv = pcall(getInventory)
+        if ok and type(inv) == "table" then
+            for _, item in pairs(inv) do
+                if item and (item.active or item.is_selected) then
+                    config.block_id = item.id
+                    seed_id         = item.id + 1
+                    temp.block_id   = tostring(item.id)
+                    
+                    pref:set("block_id", config.block_id)
+                    pref:save()
+                    editValue("block_id", config.block_id)
+                    
+                    growtopia.notify("Block ID di-set dari tangan: " .. item.id)
+                    Log("Pick Hand Berhasil! Block ID: " .. item.id .. ", Seed ID: " .. seed_id)
+                    return
+                end
+            end
+        end
+        growtopia.notify("Pegang / pilih block di inventory dulu!")
 
     elseif name == "btn_pnb_set" then
         local p = getPlayer()
@@ -893,67 +1102,111 @@ function OnValue(type, name, value)
             growtopia.notify("Drop set: X=" .. cx .. " Y=" .. cy)
         end
 
+    elseif name == "btn_trash_set" then
+        local p = getPlayer()
+        if p then
+            local cx = math.floor(p.posX / 32)
+            local cy = math.floor(p.posY / 32)
+            temp.trash_drop_x   = tostring(cx)
+            temp.trash_drop_y   = tostring(cy)
+            config.trash_drop_x = cx
+            config.trash_drop_y = cy
+            editValue("trash_drop_x", cx)
+            editValue("trash_drop_y", cy)
+            growtopia.notify("Trash Drop set: X=" .. cx .. " Y=" .. cy)
+        end
+
     elseif name == "btn_apply" then
-        config.block_id           = tonumber(temp.block_id)     or config.block_id
-        config.high_trigger       = tonumber(temp.high_trigger) or config.high_trigger
-        config.low_trigger        = tonumber(temp.low_trigger)  or config.low_trigger
+        config.block_id           = tonumber(temp.block_id)            or config.block_id
+        config.search_name        = temp.search_name
+        config.high_trigger       = tonumber(temp.high_trigger)        or config.high_trigger
+        config.low_trigger        = tonumber(temp.low_trigger)         or config.low_trigger
         config.farm_world         = temp.farm_world
         config.farm_door          = temp.farm_door
         config.drop_world         = temp.drop_world
         config.drop_door          = temp.drop_door
-        config.drop_item_id       = tonumber(temp.drop_item_id) or config.drop_item_id
-        config.min_drop_amt       = tonumber(temp.min_drop_amt) or config.min_drop_amt
-        config.pnb_x              = tonumber(temp.pnb_x)        or config.pnb_x
-        config.pnb_y              = tonumber(temp.pnb_y)        or config.pnb_y
-        config.drop_x             = tonumber(temp.drop_x)       or config.drop_x
-        config.drop_y             = tonumber(temp.drop_y)       or config.drop_y
+        config.drop_item_id       = tonumber(temp.drop_item_id)        or config.drop_item_id
+        config.min_drop_amt       = tonumber(temp.min_drop_amt)        or config.min_drop_amt
+        config.pnb_x              = tonumber(temp.pnb_x)               or config.pnb_x
+        config.pnb_y              = tonumber(temp.pnb_y)               or config.pnb_y
+        config.pnb_mode           = tonumber(temp.pnb_mode)            or config.pnb_mode
+        config.enable_verify_punch= temp.enable_verify_punch
+        config.enable_break       = temp.enable_break
+        config.enable_place       = temp.enable_place
+        config.hit_count          = tonumber(temp.hit_count)           or config.hit_count
+        config.faster_break       = temp.faster_break
+        config.drop_x             = tonumber(temp.drop_x)              or config.drop_x
+        config.drop_y             = tonumber(temp.drop_y)              or config.drop_y
+        
+        config.enable_trash_drop  = temp.enable_trash_drop
+        config.trash_item_ids     = temp.trash_item_ids
+        config.trash_drop_world   = temp.trash_drop_world
+        config.trash_drop_door    = temp.trash_drop_door
+        config.trash_drop_x       = tonumber(temp.trash_drop_x)        or config.trash_drop_x
+        config.trash_drop_y       = tonumber(temp.trash_drop_y)        or config.trash_drop_y
+
         config.enable_anti_player = temp.enable_anti_player
-        config.anti_player_cd     = tonumber(temp.anti_player_cd) or config.anti_player_cd
+        config.anti_player_cd     = tonumber(temp.anti_player_cd)        or config.anti_player_cd
         config.enable_fly         = temp.enable_fly
         config.show_punch         = temp.show_punch
-        config.work_min           = tonumber(temp.work_min)     or config.work_min
-        config.rest_min           = tonumber(temp.rest_min)     or config.rest_min
+        config.work_min           = tonumber(temp.work_min)            or config.work_min
+        config.rest_min           = tonumber(temp.rest_min)            or config.rest_min
         config.enable_jitter      = temp.enable_jitter
-        config.delay_place        = tonumber(temp.delay_place)  or config.delay_place
-        config.delay_punch        = tonumber(temp.delay_punch)  or config.delay_punch
-        config.delay_harvest      = tonumber(temp.delay_harvest) or config.delay_harvest
-        config.delay_plant        = tonumber(temp.delay_plant)  or config.delay_plant
+        config.delay_place        = tonumber(temp.delay_place)         or config.delay_place
+        config.delay_punch        = tonumber(temp.delay_punch)         or config.delay_punch
+        config.delay_harvest      = tonumber(temp.delay_harvest)       or config.delay_harvest
+        config.delay_plant        = tonumber(temp.delay_plant)         or config.delay_plant
         config.enable_safe_delay  = temp.enable_safe_delay
         config.enable_smart_delay = temp.enable_smart_delay
         config.enable_anti_miss   = temp.enable_anti_miss
 
         seed_id = config.block_id + 1
 
-        pref:set("block_id",           config.block_id)
-        pref:set("high_trigger",       config.high_trigger)
-        pref:set("low_trigger",        config.low_trigger)
-        pref:set("farm_world",         config.farm_world)
-        pref:set("farm_door",          config.farm_door)
-        pref:set("drop_world",         config.drop_world)
-        pref:set("drop_door",          config.drop_door)
-        pref:set("drop_item_id",       config.drop_item_id)
-        pref:set("min_drop_amt",       config.min_drop_amt)
-        pref:set("pnb_x",              config.pnb_x)
-        pref:set("pnb_y",              config.pnb_y)
-        pref:set("drop_x",             config.drop_x)
-        pref:set("drop_y",             config.drop_y)
-        pref:set("enable_anti_player", config.enable_anti_player)
-        pref:set("anti_player_cd",     config.anti_player_cd)
-        pref:set("enable_fly",         config.enable_fly)
-        pref:set("show_punch",         config.show_punch)
-        pref:set("work_min",           config.work_min)
-        pref:set("rest_min",           config.rest_min)
-        pref:set("enable_jitter",      config.enable_jitter)
-        pref:set("delay_place",        config.delay_place)
-        pref:set("delay_punch",        config.delay_punch)
-        pref:set("delay_harvest",      config.delay_harvest)
-        pref:set("delay_plant",        config.delay_plant)
-        pref:set("enable_safe_delay",  config.enable_safe_delay)
-        pref:set("enable_smart_delay", config.enable_smart_delay)
-        pref:set("enable_anti_miss",   config.enable_anti_miss)
+        pref:set("block_id",            config.block_id)
+        pref:set("search_name",         config.search_name)
+        pref:set("high_trigger",        config.high_trigger)
+        pref:set("low_trigger",         config.low_trigger)
+        pref:set("farm_world",          config.farm_world)
+        pref:set("farm_door",           config.farm_door)
+        pref:set("drop_world",          config.drop_world)
+        pref:set("drop_door",           config.drop_door)
+        pref:set("drop_item_id",        config.drop_item_id)
+        pref:set("min_drop_amt",        config.min_drop_amt)
+        pref:set("pnb_x",               config.pnb_x)
+        pref:set("pnb_y",               config.pnb_y)
+        pref:set("pnb_mode",            config.pnb_mode)
+        pref:set("enable_verify_punch", config.enable_verify_punch)
+        pref:set("enable_break",        config.enable_break)
+        pref:set("enable_place",        config.enable_place)
+        pref:set("hit_count",           config.hit_count)
+        pref:set("faster_break",        config.faster_break)
+        pref:set("drop_x",              config.drop_x)
+        pref:set("drop_y",              config.drop_y)
+        
+        pref:set("enable_trash_drop",   config.enable_trash_drop)
+        pref:set("trash_item_ids",      config.trash_item_ids)
+        pref:set("trash_drop_world",    config.trash_drop_world)
+        pref:set("trash_drop_door",     config.trash_drop_door)
+        pref:set("trash_drop_x",        config.trash_drop_x)
+        pref:set("trash_drop_y",        config.trash_drop_y)
+
+        pref:set("enable_anti_player",  config.enable_anti_player)
+        pref:set("anti_player_cd",      config.anti_player_cd)
+        pref:set("enable_fly",          config.enable_fly)
+        pref:set("show_punch",          config.show_punch)
+        pref:set("work_min",            config.work_min)
+        pref:set("rest_min",            config.rest_min)
+        pref:set("enable_jitter",       config.enable_jitter)
+        pref:set("delay_place",         config.delay_place)
+        pref:set("delay_punch",         config.delay_punch)
+        pref:set("delay_harvest",       config.delay_harvest)
+        pref:set("delay_plant",         config.delay_plant)
+        pref:set("enable_safe_delay",   config.enable_safe_delay)
+        pref:set("enable_smart_delay",  config.enable_smart_delay)
+        pref:set("enable_anti_miss",    config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Config & Priority Drop Tersimpan!")
+        growtopia.notify("Trash Drop & All Config Tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
@@ -964,11 +1217,6 @@ function OnValue(type, name, value)
             end
             if config.pnb_x == 0 and config.pnb_y == 0 then
                 growtopia.notify("Set posisi PnB dulu!")
-                editValue("btn_start", false)
-                return
-            end
-            if config.drop_x == 0 and config.drop_y == 0 then
-                growtopia.notify("Set posisi Drop dulu!")
                 editValue("btn_start", false)
                 return
             end
