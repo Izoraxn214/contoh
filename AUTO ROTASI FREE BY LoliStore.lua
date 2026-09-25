@@ -1,19 +1,36 @@
 local Preferences = require("preferences")
 local pref = Preferences:new("rotasi_lolistore_config.json")
 
+-- DAFTAR 12 ITEM SAMPAH BAWAAN
+local trash_defaults = {
+    { name = "Wind Essence",       id = 1120 },
+    { name = "Earth Essence",      id = 1122 },
+    { name = "Fire Essence",       id = 1124 },
+    { name = "Water Essence",      id = 1126 },
+    { name = "Aurora",             id = 1362 },
+    { name = "Obsidian",           id = 1210 },
+    { name = "Lava Lamp",          id = 1422 },
+    { name = "Fissure",            id = 1294 },
+    { name = "Waterfall",          id = 818  },
+    { name = "Hidden Door",        id = 356  },
+    { name = "Anemone",            id = 1364 },
+    { name = "Red House Entrance", id = 226  },
+}
+
 local config = {
     block_id             = pref:get("block_id",             0),
     search_name          = pref:get("search_name",          ""),
-    pnb_x                = pref:get("pnb_x",                0),
-    pnb_y                = pref:get("pnb_y",                0),
-    pnb_mode             = pref:get("pnb_mode",             1),
     
-    -- AUTOFARM SETTINGS
+    -- DIGABUNG: AUTOFARM & PNB SETTINGS
     enable_verify_punch  = pref:get("enable_verify_punch",  true),
     enable_break         = pref:get("enable_break",         true),
     enable_place         = pref:get("enable_place",         true),
     hit_count            = pref:get("hit_count",            1),
     faster_break         = pref:get("faster_break",         false),
+    pnb_x                = pref:get("pnb_x",                0),
+    pnb_y                = pref:get("pnb_y",                0),
+    pnb_mode             = pref:get("pnb_mode",             1),
+    custom_tile_offsets  = pref:get("custom_tile_offsets",  "0,-1 | -1,-1 | 1,-1"),
     
     -- DROP SEED/BLOCK UTAMA
     high_trigger         = pref:get("high_trigger",          180),
@@ -27,13 +44,10 @@ local config = {
     drop_x               = pref:get("drop_x",               0),
     drop_y               = pref:get("drop_y",               0),
     
-    -- TRASH / EXTRA ITEM DROP CONFIG (PRE-FILLED WITH CHI & DAILY DROPS)
+    -- TRASH WORLD & DOOR UTAMA (SHARED)
     enable_trash_drop    = pref:get("enable_trash_drop",    true),
-    trash_item_ids       = pref:get("trash_item_ids",       "1120,1122,1124,1126,1362,1210,1422,1294,818,356,1364,226"),
     trash_drop_world     = pref:get("trash_drop_world",     ""),
     trash_drop_door      = pref:get("trash_drop_door",      ""),
-    trash_drop_x         = pref:get("trash_drop_x",         0),
-    trash_drop_y         = pref:get("trash_drop_y",         0),
 
     -- SECURITY & DELAY
     enable_anti_player   = pref:get("enable_anti_player",   true),
@@ -55,6 +69,15 @@ local config = {
     pnb_timeout          = 4000,
     pnb_retry            = 3,
 }
+
+-- LOAD CONFIG UNTUK 12 ITEM SAMPAH INDIVIDUAL
+for i, item in ipairs(trash_defaults) do
+    config["trash_"..i.."_enable"] = pref:get("trash_"..i.."_enable", true)
+    config["trash_"..i.."_id"]     = pref:get("trash_"..i.."_id",     item.id)
+    config["trash_"..i.."_count"]  = pref:get("trash_"..i.."_count",  1)
+    config["trash_"..i.."_x"]      = pref:get("trash_"..i.."_x",      0)
+    config["trash_"..i.."_y"]      = pref:get("trash_"..i.."_y",      0)
+end
 
 local seed_id            = 0
 local running            = false
@@ -100,28 +123,24 @@ local function isThreadActive(my_id)
     return running and not reconnecting and (thread_instance == my_id)
 end
 
-local function parseIdList(raw_str)
-    local result = {}
-    if not raw_str or raw_str == "" then return result end
-    for id_str in string.gmatch(raw_str, "([^,%s]+)") do
-        local id_num = tonumber(id_str)
-        if id_num then
-            table.insert(result, id_num)
-        end
-    end
-    return result
-end
-
 local function checkPriorityDrop(my_id)
     if not isThreadActive(my_id) then return false end
 
     if config.enable_trash_drop then
-        local trash_list = parseIdList(config.trash_item_ids)
-        for _, t_id in ipairs(trash_list) do
-            if invCount(t_id) > 0 then
-                Log("`3[TRASH DROP] Item sampah/extra terdeteksi (ID: " .. t_id .. " | Jumlah: " .. invCount(t_id) .. "). Langsung drop!`0")
-                doTrashDrop(my_id, t_id)
-                return true
+        for i, item in ipairs(trash_defaults) do
+            local is_enabled = config["trash_"..i.."_enable"]
+            local t_id       = config["trash_"..i.."_id"] or 0
+            local min_cnt    = config["trash_"..i.."_count"] or 1
+            local t_x        = config["trash_"..i.."_x"] or 0
+            local t_y        = config["trash_"..i.."_y"] or 0
+
+            if is_enabled and t_id > 0 then
+                local current_amt = invCount(t_id)
+                if current_amt >= min_cnt then
+                    Log("`3[TRASH DROP] " .. item.name .. " (ID: " .. t_id .. ") berjumlah " .. current_amt .. " (>= " .. min_cnt .. "). Drop ke X=" .. t_x .. ", Y=" .. t_y .. "`0")
+                    doTrashDrop(my_id, t_id, t_x, t_y)
+                    return true
+                end
             end
         end
     end
@@ -532,7 +551,8 @@ local function doHarvestLoop(my_id)
     end
 end
 
-doTrashDrop = function(my_id, item_id)
+-- EKSEKUSI TRASH DROP DENGAN FITUR MUNDUR JIKA UBIN PENUH
+doTrashDrop = function(my_id, item_id, drop_x, drop_y)
     local count = invCount(item_id)
     if count <= 0 then return end
 
@@ -546,22 +566,43 @@ doTrashDrop = function(my_id, item_id)
 
     if not isThreadActive(my_id) then return end
 
-    local try_x = config.trash_drop_x
-    local try_y = config.trash_drop_y
+    local try_x = drop_x
+    local try_y = drop_y
+    local dropped = false
+    local max_shifts = 10
 
-    walkTo(try_x, try_y)
-    Sleep(300)
+    for i = 1, max_shifts do
+        if not isThreadActive(my_id) then break end
+        if try_x < 0 then break end
 
-    sendPacket(2, "action|drop\nitemID|" .. item_id .. "\n")
-    Sleep(200)
-    sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. item_id .. "|\ncount|" .. count .. "\n")
-    Sleep(300)
+        walkTo(try_x, try_y)
+        Sleep(300)
 
-    Log("TRASH DROP Berhasil! Item ID: " .. item_id .. " (" .. count .. " pcs) di X=" .. try_x .. ", Y=" .. try_y)
-    
+        local before_count = invCount(item_id)
+        sendPacket(2, "action|drop\nitemID|" .. item_id .. "\n")
+        Sleep(200)
+        sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. item_id .. "|\ncount|" .. count .. "\n")
+        Sleep(300)
+
+        if invCount(item_id) < before_count then
+            dropped = true
+            updateActionTime()
+            Log("TRASH DROP Berhasil! Item ID: " .. item_id .. " (" .. count .. " pcs) di X=" .. try_x .. ", Y=" .. try_y)
+            break
+        else
+            Log("Titik Trash X=" .. try_x .. " penuh/gagal drop. Coba mundur ke X=" .. (try_x - 1))
+            try_x = try_x - 1
+        end
+    end
+
+    if not dropped then
+        Log("TRASH DROP gagal di semua titik percobaan!")
+    end
+
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
 end
 
+-- EKSEKUSI DROP UTAMA SEED/BLOCK DENGAN FITUR MUNDUR JIKA PENUH
 doDrop = function(my_id)
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
     local total_item  = invCount(target_item)
@@ -632,6 +673,7 @@ doDrop = function(my_id)
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
 end
 
+-- LOGIKA SELECT TILE PATTERN
 local function getPnbTargets(cx, cy)
     local mode = config.pnb_mode or 1
     if mode == 2 then
@@ -644,6 +686,29 @@ local function getPnbTargets(cx, cy)
         return {
             {x = cx, y = cy + 1},
             {x = cx, y = cy + 2},
+        }
+    elseif mode == 4 then
+        return {
+            {x = cx - 1, y = cy},
+            {x = cx + 1, y = cy},
+        }
+    elseif mode == 5 then
+        local result = {}
+        local raw_str = config.custom_tile_offsets or ""
+        for offset_pair in string.gmatch(raw_str, "([^|]+)") do
+            local dx_str, dy_str = string.match(offset_pair, "(%-?%d+)%s*,%s*(%-?%d+)")
+            local dx, dy = tonumber(dx_str), tonumber(dy_str)
+            if dx and dy then
+                table.insert(result, {x = cx + dx, y = cy + dy})
+            end
+        end
+        if #result > 0 then return result end
+        return {
+            {x = cx - 2, y = cy - 1},
+            {x = cx - 1, y = cy - 1},
+            {x = cx,     y = cy - 1},
+            {x = cx + 1, y = cy - 1},
+            {x = cx + 2, y = cy - 1},
         }
     else
         return {
@@ -862,19 +927,18 @@ ui:addChildInputInt(dialog_main.menu,    "Low Trigger",      config.low_trigger,
 
 ui:addDivider()
 
-local dialog_autofarm = ui:addDialog("Autofarm Setting", "Settings for autofarm (Break & Place)", {})
+local dialog_autofarm = ui:addDialog("Autofarm & PnB Settings", "Pengaturan aksi Break, Place, PnB & Pola Ubin", {})
 ui:addChildToggle(dialog_autofarm.menu,   "Verify before punch", config.enable_verify_punch, "enable_verify_punch")
 ui:addChildToggle(dialog_autofarm.menu,   "Break",               config.enable_break,        "enable_break")
 ui:addChildToggle(dialog_autofarm.menu,   "Place",               config.enable_place,        "enable_place")
 ui:addChildInputInt(dialog_autofarm.menu, "Hit Count",           config.hit_count,           "cnt", "Pukulan per siklus (def:1)", "Verified", "hit_count")
 
-ui:addDivider()
+ui:addChildInputInt(dialog_autofarm.menu, "PnB X",               config.pnb_x,                "X", "Koordinat PnB X", "Verified", "pnb_x")
+ui:addChildInputInt(dialog_autofarm.menu, "PnB Y",               config.pnb_y,                "Y", "Koordinat PnB Y", "Verified", "pnb_y")
+ui:addChildButton(dialog_autofarm.menu,   "Set PnB Posisi Sekarang", "btn_pnb_set")
 
-local dialog_pnb = ui:addDialog("PnB Position & Mode", "Pengaturan lokasi & ubin pecah PnB", {})
-ui:addChildInputInt(dialog_pnb.menu, "PnB X", config.pnb_x, "X", "koordinat X", "Verified", "pnb_x")
-ui:addChildInputInt(dialog_pnb.menu, "PnB Y", config.pnb_y, "Y", "koordinat Y", "Verified", "pnb_y")
-ui:addChildButton(dialog_pnb.menu, "Set dari posisi sekarang", "btn_pnb_set")
-ui:addChildInputInt(dialog_pnb.menu, "Break Pattern Mode", config.pnb_mode, "Mode", "1: 5-Tile Top | 2: 3-Tile Top | 3: 2-Tile Bottom", "Verified", "pnb_mode")
+ui:addChildInputInt(dialog_autofarm.menu, "Select Tile Pattern", config.pnb_mode,            "Mode", "1: 5-Tile Top | 2: 3-Tile Top | 3: 2-Tile Bottom | 4: Left-Right | 5: Custom", "Verified", "pnb_mode")
+ui:addChildInputString(dialog_autofarm.menu, "Custom Tile Offsets", config.custom_tile_offsets, "Offsets", "Misal: 0,-1 | -1,-1 | 1,-1 (jika Mode=5)", "Verified", "custom_tile_offsets")
 
 ui:addDivider()
 
@@ -901,14 +965,20 @@ ui:addChildButton(dialog_drop.menu, "Set dari posisi sekarang", "btn_drop_set")
 
 ui:addDivider()
 
-local dialog_trash = ui:addDialog("Trash / Extra Items Drop", "Drop item sampah (Chi, Essence, Daily Drops)", {})
-ui:addChildToggle(dialog_trash.menu,      "Enable Auto Trash Drop", config.enable_trash_drop, "enable_trash_drop")
-ui:addChildInputString(dialog_trash.menu, "Trash Item IDs",        config.trash_item_ids,    "IDs", "1120,1122,1124 (pisahkan koma)",  "Verified", "trash_item_ids")
-ui:addChildInputString(dialog_trash.menu, "Trash Drop World",      config.trash_drop_world,  "World", "World khusus drop trash (kosong = world skrg)", "World", "trash_drop_world")
-ui:addChildInputString(dialog_trash.menu, "Trash Drop Door",       config.trash_drop_door,   "ID", "Door ID trash world", "World", "trash_drop_door")
-ui:addChildInputInt(dialog_trash.menu,    "Trash Drop X",           config.trash_drop_x,      "X", "Koordinat X drop trash", "Verified", "trash_drop_x")
-ui:addChildInputInt(dialog_trash.menu,    "Trash Drop Y",           config.trash_drop_y,      "Y", "Koordinat Y drop trash", "Verified", "trash_drop_y")
-ui:addChildButton(dialog_trash.menu, "Set Trash Posisi Sekarang", "btn_trash_set")
+local dialog_trash_main = ui:addDialog("Trash Drop Settings", "Pengaturan World/Door Sampah (Shared)", {})
+ui:addChildToggle(dialog_trash_main.menu,      "Enable Auto Trash Drop", config.enable_trash_drop, "enable_trash_drop")
+ui:addChildInputString(dialog_trash_main.menu, "Trash Drop World",      config.trash_drop_world,  "World", "World khusus trash (kosong = world skrg)", "World", "trash_drop_world")
+ui:addChildInputString(dialog_trash_main.menu, "Trash Drop Door",       config.trash_drop_door,   "ID", "Door ID trash world", "World", "trash_drop_door")
+
+for i, item in ipairs(trash_defaults) do
+    local dialog_item = ui:addDialog(i .. ". " .. item.name, "Config khusus " .. item.name, {})
+    ui:addChildToggle(dialog_item.menu,   "Enable " .. item.name,  config["trash_"..i.."_enable"], "trash_"..i.."_enable")
+    ui:addChildInputInt(dialog_item.menu, "Item ID",              config["trash_"..i.."_id"],     "ID",  "ID item", "Verified", "trash_"..i.."_id")
+    ui:addChildInputInt(dialog_item.menu, "Min Trash Count",      config["trash_"..i.."_count"],  "amt", "Min item di inventory lalu di-drop", "Verified", "trash_"..i.."_count")
+    ui:addChildInputInt(dialog_item.menu, "Drop X",               config["trash_"..i.."_x"],      "X",   "Koordinat X drop", "Verified", "trash_"..i.."_x")
+    ui:addChildInputInt(dialog_item.menu, "Drop Y",               config["trash_"..i.."_y"],      "Y",   "Koordinat Y drop", "Verified", "trash_"..i.."_y")
+    ui:addChildButton(dialog_item.menu,   "Set " .. item.name .. " Posisi Sekarang", "btn_trash_"..i.."_set")
+end
 
 ui:addDivider()
 
@@ -927,49 +997,55 @@ ui:addDivider()
 ui:addToggleButton("Start / Stop", false, "btn_start")
 
 local temp = {
-    block_id            = tostring(config.block_id),
-    search_name         = config.search_name,
-    high_trigger        = tostring(config.high_trigger),
-    low_trigger         = tostring(config.low_trigger),
-    farm_world          = config.farm_world,
-    farm_door           = config.farm_door,
-    drop_world          = config.drop_world,
-    drop_door           = config.drop_door,
-    drop_item_id        = tostring(config.drop_item_id),
-    min_drop_amt        = tostring(config.min_drop_amt),
-    pnb_x               = tostring(config.pnb_x),
-    pnb_y               = tostring(config.pnb_y),
-    pnb_mode            = tostring(config.pnb_mode),
-    enable_verify_punch = config.enable_verify_punch,
-    enable_break        = config.enable_break,
-    enable_place        = config.enable_place,
-    hit_count           = tostring(config.hit_count),
-    faster_break        = config.faster_break,
-    drop_x              = tostring(config.drop_x),
-    drop_y              = tostring(config.drop_y),
+    block_id             = tostring(config.block_id),
+    search_name          = config.search_name,
+    high_trigger         = tostring(config.high_trigger),
+    low_trigger          = tostring(config.low_trigger),
+    farm_world           = config.farm_world,
+    farm_door            = config.farm_door,
+    drop_world           = config.drop_world,
+    drop_door            = config.drop_door,
+    drop_item_id         = tostring(config.drop_item_id),
+    min_drop_amt         = tostring(config.min_drop_amt),
+    pnb_x                = tostring(config.pnb_x),
+    pnb_y                = tostring(config.pnb_y),
+    pnb_mode             = tostring(config.pnb_mode),
+    custom_tile_offsets  = config.custom_tile_offsets,
+    enable_verify_punch  = config.enable_verify_punch,
+    enable_break         = config.enable_break,
+    enable_place         = config.enable_place,
+    hit_count            = tostring(config.hit_count),
+    faster_break         = config.faster_break,
+    drop_x               = tostring(config.drop_x),
+    drop_y               = tostring(config.drop_y),
     
-    enable_trash_drop   = config.enable_trash_drop,
-    trash_item_ids      = config.trash_item_ids,
-    trash_drop_world    = config.trash_drop_world,
-    trash_drop_door     = config.trash_drop_door,
-    trash_drop_x        = tostring(config.trash_drop_x),
-    trash_drop_y        = tostring(config.trash_drop_y),
+    enable_trash_drop    = config.enable_trash_drop,
+    trash_drop_world     = config.trash_drop_world,
+    trash_drop_door      = config.trash_drop_door,
 
-    enable_anti_player  = config.enable_anti_player,
-    anti_player_cd      = tostring(config.anti_player_cd),
-    enable_fly          = config.enable_fly,
-    show_punch          = config.show_punch,
-    work_min            = tostring(config.work_min),
-    rest_min            = tostring(config.rest_min),
-    enable_jitter       = config.enable_jitter,
-    delay_place         = tostring(config.delay_place),
-    delay_punch         = tostring(config.delay_punch),
-    delay_harvest       = tostring(config.delay_harvest),
-    delay_plant         = tostring(config.delay_plant),
-    enable_safe_delay   = config.enable_safe_delay,
-    enable_smart_delay  = config.enable_smart_delay,
-    enable_anti_miss    = config.enable_anti_miss,
+    enable_anti_player   = config.enable_anti_player,
+    anti_player_cd       = tostring(config.anti_player_cd),
+    enable_fly           = config.enable_fly,
+    show_punch           = config.show_punch,
+    work_min             = tostring(config.work_min),
+    rest_min             = tostring(config.rest_min),
+    enable_jitter        = config.enable_jitter,
+    delay_place          = tostring(config.delay_place),
+    delay_punch          = tostring(config.delay_punch),
+    delay_harvest        = tostring(config.delay_harvest),
+    delay_plant          = tostring(config.delay_plant),
+    enable_safe_delay    = config.enable_safe_delay,
+    enable_smart_delay   = config.enable_smart_delay,
+    enable_anti_miss     = config.enable_anti_miss,
 }
+
+for i, _ in ipairs(trash_defaults) do
+    temp["trash_"..i.."_enable"] = config["trash_"..i.."_enable"]
+    temp["trash_"..i.."_id"]     = tostring(config["trash_"..i.."_id"])
+    temp["trash_"..i.."_count"]  = tostring(config["trash_"..i.."_count"])
+    temp["trash_"..i.."_x"]      = tostring(config["trash_"..i.."_x"])
+    temp["trash_"..i.."_y"]      = tostring(config["trash_"..i.."_y"])
+end
 
 function OnDraw(d)
     removeHook("onDraw")
@@ -993,6 +1069,7 @@ function OnValue(type, name, value)
     elseif name == "pnb_x"               then temp.pnb_x               = tostring(value)
     elseif name == "pnb_y"               then temp.pnb_y               = tostring(value)
     elseif name == "pnb_mode"            then temp.pnb_mode            = tostring(value)
+    elseif name == "custom_tile_offsets" then temp.custom_tile_offsets = value
     elseif name == "enable_verify_punch" then temp.enable_verify_punch = value
     elseif name == "enable_break"        then temp.enable_break        = value
     elseif name == "enable_place"        then temp.enable_place        = value
@@ -1002,11 +1079,8 @@ function OnValue(type, name, value)
     elseif name == "drop_y"              then temp.drop_y              = tostring(value)
     
     elseif name == "enable_trash_drop"   then temp.enable_trash_drop   = value
-    elseif name == "trash_item_ids"      then temp.trash_item_ids      = value
     elseif name == "trash_drop_world"    then temp.trash_drop_world    = value
     elseif name == "trash_drop_door"     then temp.trash_drop_door     = value
-    elseif name == "trash_drop_x"        then temp.trash_drop_x        = tostring(value)
-    elseif name == "trash_drop_y"        then temp.trash_drop_y        = tostring(value)
 
     elseif name == "enable_anti_player"  then temp.enable_anti_player  = value
     elseif name == "anti_player_cd"      then temp.anti_player_cd      = tostring(value)
@@ -1022,8 +1096,36 @@ function OnValue(type, name, value)
     elseif name == "enable_safe_delay"   then temp.enable_safe_delay   = value
     elseif name == "enable_smart_delay"  then temp.enable_smart_delay  = value
     elseif name == "enable_anti_miss"    then temp.enable_anti_miss    = value
+    end
 
-    elseif name == "btn_search_item" then
+    for i, item in ipairs(trash_defaults) do
+        if name == "trash_"..i.."_enable" then
+            temp["trash_"..i.."_enable"] = value
+        elseif name == "trash_"..i.."_id" then
+            temp["trash_"..i.."_id"]     = tostring(value)
+        elseif name == "trash_"..i.."_count" then
+            temp["trash_"..i.."_count"]  = tostring(value)
+        elseif name == "trash_"..i.."_x" then
+            temp["trash_"..i.."_x"]      = tostring(value)
+        elseif name == "trash_"..i.."_y" then
+            temp["trash_"..i.."_y"]      = tostring(value)
+        elseif name == "btn_trash_"..i.."_set" then
+            local p = getPlayer()
+            if p then
+                local cx = math.floor(p.posX / 32)
+                local cy = math.floor(p.posY / 32)
+                temp["trash_"..i.."_x"]   = tostring(cx)
+                temp["trash_"..i.."_y"]   = tostring(cy)
+                config["trash_"..i.."_x"] = cx
+                config["trash_"..i.."_y"] = cy
+                editValue("trash_"..i.."_x", cx)
+                editValue("trash_"..i.."_y", cy)
+                growtopia.notify(item.name .. " Drop set: X=" .. cx .. " Y=" .. cy)
+            end
+        end
+    end
+
+    if name == "btn_search_item" then
         local query = string.lower(temp.search_name or "")
         if query == "" then
             growtopia.notify("Ketik nama item dulu di kolom Search!")
@@ -1102,20 +1204,6 @@ function OnValue(type, name, value)
             growtopia.notify("Drop set: X=" .. cx .. " Y=" .. cy)
         end
 
-    elseif name == "btn_trash_set" then
-        local p = getPlayer()
-        if p then
-            local cx = math.floor(p.posX / 32)
-            local cy = math.floor(p.posY / 32)
-            temp.trash_drop_x   = tostring(cx)
-            temp.trash_drop_y   = tostring(cy)
-            config.trash_drop_x = cx
-            config.trash_drop_y = cy
-            editValue("trash_drop_x", cx)
-            editValue("trash_drop_y", cy)
-            growtopia.notify("Trash Drop set: X=" .. cx .. " Y=" .. cy)
-        end
-
     elseif name == "btn_apply" then
         config.block_id           = tonumber(temp.block_id)            or config.block_id
         config.search_name        = temp.search_name
@@ -1130,6 +1218,7 @@ function OnValue(type, name, value)
         config.pnb_x              = tonumber(temp.pnb_x)               or config.pnb_x
         config.pnb_y              = tonumber(temp.pnb_y)               or config.pnb_y
         config.pnb_mode           = tonumber(temp.pnb_mode)            or config.pnb_mode
+        config.custom_tile_offsets= temp.custom_tile_offsets
         config.enable_verify_punch= temp.enable_verify_punch
         config.enable_break       = temp.enable_break
         config.enable_place       = temp.enable_place
@@ -1139,11 +1228,22 @@ function OnValue(type, name, value)
         config.drop_y             = tonumber(temp.drop_y)              or config.drop_y
         
         config.enable_trash_drop  = temp.enable_trash_drop
-        config.trash_item_ids     = temp.trash_item_ids
         config.trash_drop_world   = temp.trash_drop_world
         config.trash_drop_door    = temp.trash_drop_door
-        config.trash_drop_x       = tonumber(temp.trash_drop_x)        or config.trash_drop_x
-        config.trash_drop_y       = tonumber(temp.trash_drop_y)        or config.trash_drop_y
+
+        for i, _ in ipairs(trash_defaults) do
+            config["trash_"..i.."_enable"] = temp["trash_"..i.."_enable"]
+            config["trash_"..i.."_id"]     = tonumber(temp["trash_"..i.."_id"])     or config["trash_"..i.."_id"]
+            config["trash_"..i.."_count"]  = tonumber(temp["trash_"..i.."_count"])  or config["trash_"..i.."_count"]
+            config["trash_"..i.."_x"]      = tonumber(temp["trash_"..i.."_x"])      or config["trash_"..i.."_x"]
+            config["trash_"..i.."_y"]      = tonumber(temp["trash_"..i.."_y"])      or config["trash_"..i.."_y"]
+
+            pref:set("trash_"..i.."_enable", config["trash_"..i.."_enable"])
+            pref:set("trash_"..i.."_id",     config["trash_"..i.."_id"])
+            pref:set("trash_"..i.."_count",  config["trash_"..i.."_count"])
+            pref:set("trash_"..i.."_x",      config["trash_"..i.."_x"])
+            pref:set("trash_"..i.."_y",      config["trash_"..i.."_y"])
+        end
 
         config.enable_anti_player = temp.enable_anti_player
         config.anti_player_cd     = tonumber(temp.anti_player_cd)        or config.anti_player_cd
@@ -1175,6 +1275,7 @@ function OnValue(type, name, value)
         pref:set("pnb_x",               config.pnb_x)
         pref:set("pnb_y",               config.pnb_y)
         pref:set("pnb_mode",            config.pnb_mode)
+        pref:set("custom_tile_offsets", config.custom_tile_offsets)
         pref:set("enable_verify_punch", config.enable_verify_punch)
         pref:set("enable_break",        config.enable_break)
         pref:set("enable_place",        config.enable_place)
@@ -1184,11 +1285,8 @@ function OnValue(type, name, value)
         pref:set("drop_y",              config.drop_y)
         
         pref:set("enable_trash_drop",   config.enable_trash_drop)
-        pref:set("trash_item_ids",      config.trash_item_ids)
         pref:set("trash_drop_world",    config.trash_drop_world)
         pref:set("trash_drop_door",     config.trash_drop_door)
-        pref:set("trash_drop_x",        config.trash_drop_x)
-        pref:set("trash_drop_y",        config.trash_drop_y)
 
         pref:set("enable_anti_player",  config.enable_anti_player)
         pref:set("anti_player_cd",      config.anti_player_cd)
@@ -1206,7 +1304,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",    config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Trash Drop & All Config Tersimpan!")
+        growtopia.notify("All Settings & Config Tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
