@@ -112,7 +112,7 @@ local function updateActionTime()
     end
 end
 
--- OPTIMASI: BACA INVENTORY CUMA 1 KALI (Mencegah Lag CPU)
+-- INVENTORY SCANNER CACHED (Sangat Ringan CPU)
 local function getInventoryMap()
     local ok, inv = pcall(getInventory)
     if not ok or type(inv) ~= "table" then return nil end
@@ -142,7 +142,7 @@ local function isThreadActive(my_id)
     return running and not reconnecting and (thread_instance == my_id)
 end
 
--- OPTIMASI: PRIORITY DROP DENGAN THROTTLING & SINGLE-CALL INVENTORY SCAN
+-- PRIORITY DROP CHECKER (Di-throttle Maksimal 1 Detik)
 local function checkPriorityDrop(my_id, force)
     if not isThreadActive(my_id) then return false end
 
@@ -167,7 +167,7 @@ local function checkPriorityDrop(my_id, force)
             if is_enabled and t_id > 0 then
                 local current_amt = invMap[t_id] or 0
                 if current_amt >= min_cnt then
-                    Log("`3[PRIORITY TRASH DROP] " .. item.name .. " (ID: " .. t_id .. ") berjumlah " .. current_amt .. " (>= " .. min_cnt .. "). Drop!`0")
+                    Log("`3[PRIORITY TRASH DROP] " .. item.name .. " (ID: " .. t_id .. ") berjumlah " .. current_amt .. " (>= " .. min_cnt .. "). Langsung Warp Drop!`0")
                     doTrashDrop(my_id, t_id, t_x, t_y)
                     return true
                 end
@@ -182,7 +182,7 @@ local function checkPriorityDrop(my_id, force)
     if target_item > 0 then
         local current_amt = invMap[target_item] or 0
         if current_amt >= config.high_trigger then
-            Log("`3[PRIORITY DROP SEED/BLOCK] Item ID " .. target_item .. " penuh (" .. current_amt .. " >= " .. config.high_trigger .. "). Drop!`0")
+            Log("`3[PRIORITY DROP SEED/BLOCK] Item ID " .. target_item .. " penuh (" .. current_amt .. " >= " .. config.high_trigger .. "). Langsung Warp Drop!`0")
             doDrop(my_id)
             return true
         end
@@ -457,7 +457,6 @@ local function walkTo(tx, ty)
     return false
 end
 
--- OPTIMASI: THROTTLE COLLECT NEARBY (Ringan di FPS)
 local function collectNearby(radius_px)
     local now = os.time()
     if (now - last_collect_time) < 1 then return end
@@ -485,13 +484,16 @@ local function collectNearby(radius_px)
     end
 end
 
+-- MENCARI POHON MATANG DENGAN VALIDASI KETAT
 local function getReadyHarvestTiles()
     local tiles  = safeGetTiles()
     local result = {}
     if not tiles then return result end
     for _, tile in pairs(tiles) do
         if tile and tile.fg == seed_id then
-            table.insert(result, {x = tile.x, y = tile.y})
+            if tile.readyharvest == true or tile.ready == true or tile.readyharvest == nil then
+                table.insert(result, {x = tile.x, y = tile.y})
+            end
         end
     end
     table.sort(result, function(a, b)
@@ -501,6 +503,7 @@ local function getReadyHarvestTiles()
     return result
 end
 
+-- MENCARI LAHAN KOSONG UNTUK DITANAM
 local function getPlantableTiles()
     local tiles  = safeGetTiles()
     local result = {}
@@ -530,7 +533,7 @@ local function doPlant(my_id)
     for _, t in ipairs(plant_tiles) do
         if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
         
-        if checkPriorityDrop(my_id) then return end
+        if checkPriorityDrop(my_id) then end
         if invCount(seed_id) <= config.low_trigger then break end
 
         local tile = safeGetTile(t.x, t.y)
@@ -565,7 +568,7 @@ local function doHarvestLoop(my_id)
     for _, t in ipairs(ready_tiles) do
         if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
         
-        if checkPriorityDrop(my_id) then return end
+        if checkPriorityDrop(my_id) then end
         if invCount(config.block_id) >= config.high_trigger then break end
 
         local tile = safeGetTile(t.x, t.y)
@@ -590,7 +593,7 @@ local function doHarvestLoop(my_id)
                     end
                 end
                 collectNearby()
-                if checkPriorityDrop(my_id) then return end
+                if checkPriorityDrop(my_id) then end
             end
         end
     end
@@ -804,43 +807,40 @@ local function doPnb(my_id)
     end
 end
 
+-- LOGIKA LINIER KLASIK AMAN (Panen -> PnB -> Tanam -> PnB -> Selesai)
 local function processCurrentWorld(my_id)
-    while isThreadActive(my_id) do
-        if not checkAntiPlayer(my_id) then return false end
-        applyModFly()
-        checkWatchdog(my_id)
+    if not isThreadActive(my_id) then return false end
+    applyModFly()
+    checkWatchdog(my_id)
 
-        checkPriorityDrop(my_id)
+    -- 1. PANEN SEMUA POHON YANG SUDAH ADA
+    Log("Step 1: Panen (Harvest)...")
+    doHarvestLoop(my_id)
+    if not isThreadActive(my_id) then return false end
 
-        local ready_tiles = getReadyHarvestTiles()
-        local plant_tiles = getPlantableTiles()
-        local current_blocks = invCount(config.block_id)
-
-        if #ready_tiles == 0 and (#plant_tiles == 0 or invCount(seed_id) < config.low_trigger) and current_blocks < config.high_trigger then
-            Log("World ini sudah bersih (tidak ada tanaman/lahan/block PnB). Pindah world!")
-            return true
-        end
-
-        if #ready_tiles > 0 and current_blocks < config.high_trigger then
-            doHarvestLoop(my_id)
-            if not isThreadActive(my_id) then return false end
-        end
-
-        current_blocks = invCount(config.block_id)
-
-        if current_blocks >= config.high_trigger then
-            doPnb(my_id)
-            if not isThreadActive(my_id) then return false end
-        end
-
-        if invCount(seed_id) >= config.low_trigger then
-            doPlant(my_id)
-            if not isThreadActive(my_id) then return false end
-        end
-
-        Sleep(200)
+    -- 2. PNB JIKA BLOCK PENUH HASIL PANEN
+    if invCount(config.block_id) >= config.high_trigger then
+        Log("Step 2: PnB Block...")
+        doPnb(my_id)
+        if not isThreadActive(my_id) then return false end
     end
-    return false
+
+    -- 3. TANAM SEMUA SEED YANG ADA KE LAHAN KOSONG
+    if invCount(seed_id) >= config.low_trigger then
+        Log("Step 3: Tanam Seed...")
+        doPlant(my_id)
+        if not isThreadActive(my_id) then return false end
+    end
+
+    -- 4. PNB SISA BLOCK JIKA MASIH TERKUMPUL
+    if invCount(config.block_id) > config.low_trigger then
+        Log("Step 4: PnB Sisa Block...")
+        doPnb(my_id)
+        if not isThreadActive(my_id) then return false end
+    end
+
+    Log("World ini sudah selesai diproses secara bersih. Rotasi!")
+    return true
 end
 
 local function reconnectMonitor(my_id)
@@ -1270,7 +1270,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",    config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Lag Fixed & Config Saved!")
+        growtopia.notify("Update Berhasil & Config Saved!")
 
     elseif name == "btn_start" then
         if value == true then
