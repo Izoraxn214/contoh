@@ -1,5 +1,5 @@
-local Preferences = require("preferences")
-local pref = Preferences:new("rotasi_lolistore_config.json")
+local Preferences = require("preferences")[cite: 8]
+local pref = Preferences:new("rotasi_lolistore_config.json")[cite: 8]
 
 -- DAFTAR 12 ITEM SAMPAH BAWAAN
 local trash_defaults = {
@@ -18,112 +18,89 @@ local trash_defaults = {
 }
 
 local config = {
-    -- MAIN CONFIG
-    block_id             = pref:get("block_id",             0),
-    seed_id              = pref:get("seed_id",              0),
-    
-    -- AUTOFARM & PNB SETTINGS
-    enable_verify_punch  = pref:get("enable_verify_punch",  true),
-    enable_break         = pref:get("enable_break",         true),
-    enable_place         = pref:get("enable_place",         true),
-    hit_count            = pref:get("hit_count",            1),
-    faster_break         = pref:get("faster_break",         false),
-    pnb_x                = pref:get("pnb_x",                0),
-    pnb_y                = pref:get("pnb_y",                0),
-    pnb_mode             = pref:get("pnb_mode",             1),
-    
-    -- DROP SEED/BLOCK UTAMA
-    high_trigger         = pref:get("high_trigger",          180),
-    low_trigger          = pref:get("low_trigger",           10),
-    farm_world           = pref:get("farm_world",           ""),
-    farm_door            = pref:get("farm_door",            ""),
-    drop_world           = pref:get("drop_world",           ""),
-    drop_door            = pref:get("drop_door",            ""),
-    drop_item_id         = pref:get("drop_item_id",         0),
-    min_drop_amt         = pref:get("min_drop_amt",         20),
-    drop_x               = pref:get("drop_x",               0),
-    drop_y               = pref:get("drop_y",               0),
-    
-    -- TRASH WORLD & DOOR UTAMA (SHARED)
-    enable_trash_drop    = pref:get("enable_trash_drop",    true),
-    trash_drop_world     = pref:get("trash_drop_world",     ""),
-    trash_drop_door      = pref:get("trash_drop_door",      ""),
-
-    -- SECURITY & DELAY
-    enable_anti_player   = pref:get("enable_anti_player",   true),
-    anti_player_cd       = pref:get("anti_player_cd",       120),
-    enable_fly           = pref:get("enable_fly",           true),
-    work_min             = pref:get("work_min",             45),
-    rest_min             = pref:get("rest_min",             10),
-    enable_jitter        = pref:get("enable_jitter",        false),
-    show_punch           = pref:get("show_punch",           true),
-    
-    delay_place          = pref:get("delay_place",          80),
-    delay_punch          = pref:get("delay_punch",          180),
-    delay_harvest        = pref:get("delay_harvest",        180),
-    delay_plant          = pref:get("delay_plant",          120),
-    enable_safe_delay    = pref:get("enable_safe_delay",    true),
-    enable_smart_delay   = pref:get("enable_smart_delay",   true),
-    enable_anti_miss     = pref:get("enable_anti_miss",     true),
-
-    pnb_timeout          = 4000,
+    block_id             = pref:get("block_id",             0),[cite: 8]
+    seed_id              = pref:get("seed_id",              0),[cite: 8]
+    enable_verify_punch  = pref:get("enable_verify_punch",  true),[cite: 8]
+    enable_break         = pref:get("enable_break",         true),[cite: 8]
+    enable_place         = pref:get("enable_place",         true),[cite: 8]
+    hit_count            = pref:get("hit_count",            1),[cite: 8]
+    faster_break         = pref:get("faster_break",         false),[cite: 8]
+    pnb_x                = pref:get("pnb_x",                0),[cite: 8]
+    pnb_y                = pref:get("pnb_y",                0),[cite: 8]
+    pnb_mode             = pref:get("pnb_mode",             1),[cite: 8]
+    high_trigger         = pref:get("high_trigger",          180),[cite: 8]
+    low_trigger          = pref:get("low_trigger",           10),[cite: 8]
+    farm_world           = pref:get("farm_world",           ""),[cite: 8]
+    farm_door            = pref:get("farm_door",            ""),[cite: 8]
+    drop_world           = pref:get("drop_world",           ""),[cite: 8]
+    drop_door            = pref:get("drop_door",            ""),[cite: 8]
+    drop_item_id         = pref:get("drop_item_id",         0),[cite: 8]
+    min_drop_amt         = pref:get("min_drop_amt",         20),[cite: 8]
+    drop_x               = pref:get("drop_x",               0),[cite: 8]
+    drop_y               = pref:get("drop_y",               0),[cite: 8]
+    enable_trash_drop    = pref:get("enable_trash_drop",    true),[cite: 8]
+    trash_drop_world     = pref:get("trash_drop_world",     ""),[cite: 8]
+    trash_drop_door      = pref:get("trash_drop_door",      ""),[cite: 8]
+    enable_anti_player   = pref:get("enable_anti_player",   true),[cite: 8]
+    anti_player_cd       = pref:get("anti_player_cd",       120),[cite: 8]
+    enable_fly           = pref:get("enable_fly",           true),[cite: 8]
+    work_min             = pref:get("work_min",             45),[cite: 8]
+    rest_min             = pref:get("rest_min",             10),[cite: 8]
+    enable_jitter        = pref:get("enable_jitter",        false),[cite: 8]
+    show_punch           = pref:get("show_punch",           true),[cite: 8]
+    delay_place          = pref:get("delay_place",          80),[cite: 8]
+    delay_punch          = pref:get("delay_punch",          150),[cite: 8]
+    delay_harvest        = pref:get("delay_harvest",        150),[cite: 8]
+    delay_plant          = pref:get("delay_plant",          100),[cite: 8]
+    enable_safe_delay    = pref:get("enable_safe_delay",    true),[cite: 8]
+    enable_smart_delay   = pref:get("enable_smart_delay",   true),[cite: 8]
+    enable_anti_miss     = pref:get("enable_anti_miss",     true),[cite: 8]
     pnb_retry            = 3,
 }
 
--- LOAD CONFIG UNTUK 12 ITEM SAMPAH INDIVIDUAL
 for i, item in ipairs(trash_defaults) do
-    config["trash_"..i.."_enable"] = pref:get("trash_"..i.."_enable", true)
-    config["trash_"..i.."_id"]     = pref:get("trash_"..i.."_id",     item.id)
-    config["trash_"..i.."_count"]  = pref:get("trash_"..i.."_count",  1)
-    config["trash_"..i.."_x"]      = pref:get("trash_"..i.."_x",      0)
-    config["trash_"..i.."_y"]      = pref:get("trash_"..i.."_y",      0)
+    config["trash_"..i.."_enable"] = pref:get("trash_"..i.."_enable", true)[cite: 8]
+    config["trash_"..i.."_id"]     = pref:get("trash_"..i.."_id",     item.id)[cite: 8]
+    config["trash_"..i.."_count"]  = pref:get("trash_"..i.."_count",  1)[cite: 8]
+    config["trash_"..i.."_x"]      = pref:get("trash_"..i.."_x",      0)[cite: 8]
+    config["trash_"..i.."_y"]      = pref:get("trash_"..i.."_y",      0)[cite: 8]
 end
 
-local seed_id            = 0
-local running            = false
-local reconnecting       = false
-local action_count       = 0
-local gc_counter         = 0
-local thread_instance    = 0
-local session_start_time = 0
-
-local last_action_time   = 0
-local last_priority_check= 0
-local last_collect_time  = 0
-local current_work_sec   = 0
-local current_rest_sec   = 0
-
-local farm_world_list    = {}
-local current_farm_index = 1
-
-local doDrop
-local doTrashDrop
-
-local function Log(msg)
-    LogToConsole("`5[LoliStore 24/7] `0" .. tostring(msg))
+local active_trash_list = {}
+local function updateActiveTrashList()
+    active_trash_list = {}
+    if not config.enable_trash_drop then return end
+    for i=1, 12 do
+        if config["trash_"..i.."_enable"] and config["trash_"..i.."_id"] > 0 then
+            table.insert(active_trash_list, {
+                name  = trash_defaults[i].name, id = config["trash_"..i.."_id"],
+                count = config["trash_"..i.."_count"], x = config["trash_"..i.."_x"], y = config["trash_"..i.."_y"]
+            })
+        end
+    end
 end
+
+local seed_id, running, reconnecting, action_count, gc_counter, thread_instance, session_start_time = 0, false, false, 0, 0, 0, 0
+local last_action_time, last_priority_check, last_collect_time, current_work_sec, current_rest_sec = 0, 0, 0, 0, 0
+local farm_world_list, current_farm_index = {}, 1
+local doDrop, doTrashDrop
+
+local function Log(msg) LogToConsole("`5[LoliStore 24/7] `0" .. tostring(msg)) end
 
 local function updateActionTime()
     last_action_time = os.time()
     gc_counter = gc_counter + 1
-    if gc_counter >= 50 then
-        collectgarbage("collect")
-        gc_counter = 0
-    end
+    if gc_counter >= 50 then collectgarbage("collect"); gc_counter = 0 end
 end
 
--- INVENTORY SCANNER CACHED
 local function getInventoryMap()
     local ok, inv = pcall(getInventory)
     if not ok or type(inv) ~= "table" then return nil end
     local map = {}
     for _, item in pairs(inv) do
         if item and item.id then
-            local id  = tonumber(item.id)
-            local amt = tonumber(item.amount or item.count or item.cnt or 0) or 0
-            if id then
-                map[id] = (map[id] or 0) + amt
-            end
+            local id, amt = tonumber(item.id), tonumber(item.amount or item.count or item.cnt or 0) or 0
+            if id then map[id] = (map[id] or 0) + amt end
         end
     end
     return map
@@ -131,173 +108,99 @@ end
 
 local function invCount(item_id, invMap)
     if not item_id or tonumber(item_id) == 0 then return 0 end
-    if invMap then
-        return invMap[tonumber(item_id)] or 0
-    end
+    if invMap then return invMap[tonumber(item_id)] or 0 end
     local map = getInventoryMap()
     return map and (map[tonumber(item_id)] or 0) or 0
 end
 
-local function isThreadActive(my_id)
-    return running and not reconnecting and (thread_instance == my_id)
-end
+local function isThreadActive(my_id) return running and not reconnecting and (thread_instance == my_id) end
 
--- PRIORITY DROP CHECKER
 local function checkPriorityDrop(my_id, force)
     if not isThreadActive(my_id) then return false end
-
     local now = os.time()
-    if not force and (now - last_priority_check < 1) then
-        return false
-    end
+    if not force and (now - last_priority_check < 2) then return false end
 
     local invMap = getInventoryMap()
     if not invMap then return false end
 
-    -- 1. CEK TRASH ITEMS
     if config.enable_trash_drop then
-        for i, item in ipairs(trash_defaults) do
-            local is_enabled = config["trash_"..i.."_enable"]
-            local t_id       = config["trash_"..i.."_id"] or 0
-            local min_cnt    = config["trash_"..i.."_count"] or 1
-            local t_x        = config["trash_"..i.."_x"] or 0
-            local t_y        = config["trash_"..i.."_y"] or 0
-
-            if is_enabled and t_id > 0 then
-                local current_amt = invMap[t_id] or 0
-                if current_amt >= min_cnt then
-                    last_priority_check = now
-                    Log("`3[PRIORITY TRASH DROP] " .. item.name .. " (ID: " .. t_id .. ") berjumlah " .. current_amt .. " (>= " .. min_cnt .. "). Langsung Warp Drop!`0")
-                    return doTrashDrop(my_id, t_id, t_x, t_y)
-                end
+        for _, t in ipairs(active_trash_list) do
+            local current_amt = invMap[t.id] or 0
+            if current_amt >= t.count then
+                last_priority_check = now
+                Log("`3[TRASH DROP] " .. t.name .. " penuh. Warp Drop!`0")
+                return doTrashDrop(my_id, t.id, t.x, t.y)
             end
         end
     end
 
-    -- 2. CEK SEED / BLOCK UTAMA
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
     if target_item == 0 then target_item = config.block_id end
-
     if target_item > 0 then
         local current_amt = invMap[target_item] or 0
         if current_amt >= config.high_trigger then
             last_priority_check = now
-            Log("`3[PRIORITY DROP SEED/BLOCK] Item ID " .. target_item .. " penuh (" .. current_amt .. " >= " .. config.high_trigger .. "). Langsung Warp Drop!`0")
+            Log("`3[DROP SEED/BLOCK] Tas penuh. Warp Drop!`0")
             return doDrop(my_id)
         end
     end
-
     return false
 end
 
 local function randomizeTimers()
-    local work_var = math.random(-3, 5)
-    local rest_var = math.random(-2, 3)
-
-    local final_work = math.max(10, config.work_min + work_var)
-    local final_rest = math.max(2, config.rest_min + rest_var)
-
-    current_work_sec = final_work * 60
-    current_rest_sec = final_rest * 60
-    Log("Siklus Kerja Baru: " .. final_work .. " min | Istirahat: " .. final_rest .. " min")
+    current_work_sec = math.max(10, config.work_min + math.random(-3, 5)) * 60
+    current_rest_sec = math.max(2, config.rest_min + math.random(-2, 3)) * 60
 end
 
 local function applyModFly()
-    if config.enable_fly then
-        pcall(function()
-            if setFly then
-                setFly(true)
-            elseif growtopia and growtopia.setFly then
-                growtopia.setFly(true)
-            end
-        end)
-    end
+    if config.enable_fly then pcall(function() if setFly then setFly(true) elseif growtopia and growtopia.setFly then growtopia.setFly(true) end end) end
 end
 
 local function parseWorldList(raw_str)
     local result = {}
     if not raw_str or raw_str == "" then return result end
-    for w in string.gmatch(raw_str, "([^,%s]+)") do
-        table.insert(result, w)
-    end
+    for w in string.gmatch(raw_str, "([^,%s]+)") do table.insert(result, w) end
     return result
 end
 
 local function getCurrentFarmWorld()
     if #farm_world_list == 0 then return "" end
-    if current_farm_index > #farm_world_list then
-        current_farm_index = 1
-    end
+    if current_farm_index > #farm_world_list then current_farm_index = 1 end
     return farm_world_list[current_farm_index] or ""
 end
 
 local function nextFarmWorld()
     if #farm_world_list <= 1 then return end
-    current_farm_index = current_farm_index + 1
-    if current_farm_index > #farm_world_list then
-        current_farm_index = 1
-    end
-    Log("Rotasi berpindah ke World Farm berikutnya: " .. getCurrentFarmWorld())
+    current_farm_index = (current_farm_index % #farm_world_list) + 1
+    Log("Pindah ke World Farm: " .. getCurrentFarmWorld())
 end
 
+-- TURBO ACTION SLEEP (Pengurangan beban Smart Delay)
 local function ActionSleep(base_ms)
     local ms = base_ms
-
-    if config.enable_safe_delay and ms < 100 then
-        ms = 100
-    end
-
+    if config.enable_safe_delay and ms < 80 then ms = 80 end
     if config.enable_smart_delay then
-        ms = ms + math.random(15, 65)
+        ms = ms + math.random(5, 20)
         action_count = action_count + 1
-        if action_count % math.random(15, 25) == 0 then
-            ms = ms + math.random(100, 300)
-        end
+        if action_count % 30 == 0 then ms = ms + math.random(50, 150) end
     elseif config.enable_jitter then
-        ms = ms + math.random(10, 40)
+        ms = ms + math.random(5, 10)
     end
-
     Sleep(ms)
 end
 
-local function getPlayer()
-    local ok, p = pcall(getLocal)
-    if ok and p then return p end
-    return nil
-end
-
-local function getPlayerTile()
-    local p = getPlayer()
-    if not p then return nil, nil end
-    return math.floor(p.posX / 32), math.floor(p.posY / 32)
-end
-
-local function safeGetPlayerList()
-    local ok, list = pcall(getPlayerList)
-    if ok and type(list) == "table" then return list end
-    return nil
-end
-
-local function safeGetWorldName()
-    local ok, w = pcall(GetWorldName)
-    if ok and w and w ~= "" and string.upper(w) ~= "EXIT" then return w end
-    return nil
-end
+local function getPlayer() local ok, p = pcall(getLocal); if ok and p then return p end; return nil end
+local function getPlayerTile() local p = getPlayer(); if not p then return nil, nil end; return math.floor(p.posX / 32), math.floor(p.posY / 32) end
+local function safeGetPlayerList() local ok, list = pcall(getPlayerList); if ok and type(list) == "table" then return list end; return nil end
+local function safeGetWorldName() local ok, w = pcall(GetWorldName); if ok and w and w ~= "" and string.upper(w) ~= "EXIT" then return w end; return nil end
 
 local function warpToWorld(target_world, door_id, my_id, force)
     if not target_world or target_world == "" then return false end
     local current_w = safeGetWorldName()
+    if not force and current_w and string.upper(current_w) == string.upper(target_world) then return true end
 
-    if not force and current_w and string.upper(current_w) == string.upper(target_world) then
-        return true
-    end
-
-    local warp_str = target_world
-    if door_id and door_id ~= "" then
-        warp_str = warp_str .. "|" .. door_id
-    end
-
-    Log("Warp ke World: " .. warp_str)
+    local warp_str = door_id and door_id ~= "" and (target_world .. "|" .. door_id) or target_world
+    Log("Warp: " .. warp_str)
     growtopia.warpTo(warp_str)
 
     local elapsed = 0
@@ -307,12 +210,10 @@ local function warpToWorld(target_world, door_id, my_id, force)
         if w and string.upper(w) == string.upper(target_world) then
             Sleep(1000)
             applyModFly()
-            collectgarbage("collect")
             updateActionTime()
             return true
         end
-        Sleep(1000)
-        elapsed = elapsed + 1000
+        Sleep(1000); elapsed = elapsed + 1000
     end
     return false
 end
@@ -325,17 +226,13 @@ local function checkAntiPlayer(my_id)
 
     for _, p in pairs(players) do
         if p and p.netID and p.netID ~= local_p.netID then
-            Log("`4[DANGER] Player/Mod terdeteksi! Warp EXIT & Cooldown " .. config.anti_player_cd .. " detik...")
+            Log("`4[ANTI-PLAYER] Orang terdeteksi! Lari ke EXIT. CD: " .. config.anti_player_cd .. " dtk")
             growtopia.warpTo("EXIT")
-
-            local cd_elapsed = 0
-            while cd_elapsed < config.anti_player_cd do
+            local cd = 0
+            while cd < config.anti_player_cd do
                 if not isThreadActive(my_id) then return false end
-                Sleep(1000)
-                cd_elapsed = cd_elapsed + 1
+                Sleep(1000); cd = cd + 1
             end
-
-            Log("Cooldown selesai, kembali ke world kerja...")
             warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
             return false
         end
@@ -345,85 +242,36 @@ end
 
 local function checkWorkRestCycle(my_id)
     if config.work_min <= 0 or config.rest_min <= 0 then return end
-    local elapsed_work = os.time() - session_start_time
-
-    if elapsed_work >= current_work_sec then
-        Log("Waktunya istirahat AFK (Warp ke EXIT)...")
+    if (os.time() - session_start_time) >= current_work_sec then
+        Log("Waktunya istirahat AFK...")
         growtopia.warpTo("EXIT")
-
-        local rest_elapsed = 0
-        while rest_elapsed < current_rest_sec do
-            if not running or (thread_instance ~= my_id) then return end
-            Sleep(2000)
-            if not reconnecting then
-                rest_elapsed = rest_elapsed + 2
-            end
+        local rest = 0
+        while rest < current_rest_sec do
+            if not isThreadActive(my_id) then return end
+            Sleep(2000); if not reconnecting then rest = rest + 2 end
         end
-
         session_start_time = os.time()
         randomizeTimers()
-        Log("Istirahat selesai! Kembali ke world farm...")
         warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
     end
 end
 
-local function checkWatchdog(my_id)
-    if last_action_time == 0 then return end
-    local idle_time = os.time() - last_action_time
-
-    if idle_time >= 180 then
-        Log("`4[WATCHDOG] Bot terdeteksi stuck/freeze (" .. idle_time .. " detik)! Memaksa re-warp...")
-        last_action_time = os.time()
-        warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
-    end
-end
-
-local function safeGetTile(tx, ty)
-    if tx < 0 or tx >= 100 or ty < 0 or ty >= 60 then return nil end
-    local ok, tile = pcall(getTile, tx, ty)
-    if ok then return tile end
-    return nil
-end
-
-local function safeGetTiles()
-    local ok, tiles = pcall(getTiles)
-    if ok and type(tiles) == "table" then return tiles end
-    return nil
-end
-
-local function safeGetObjects()
-    local ok, objs = pcall(getObjectList)
-    if ok and type(objs) == "table" then return objs end
-    return nil
-end
+local function safeGetTile(tx, ty) if tx < 0 or tx >= 100 or ty < 0 or ty >= 60 then return nil end; local ok, t = pcall(getTile, tx, ty); return ok and t or nil end
+local function safeGetTiles() local ok, t = pcall(getTiles); return ok and type(t) == "table" and t or nil end
+local function safeGetObjects() local ok, o = pcall(getObjectList); return ok and type(o) == "table" and o or nil end
 
 local function punchTile(tx, ty, target_id)
     if not config.enable_break then return end
     local p = getPlayer()
     if not p then return end
-
     if config.enable_verify_punch then
-        local tile = safeGetTile(tx, ty)
-        local expected = target_id or config.block_id
-        if not tile or (expected > 0 and tile.fg ~= expected) then
-            return
-        end
+        local t = safeGetTile(tx, ty)
+        if not t or ((target_id or config.block_id) > 0 and t.fg ~= (target_id or config.block_id)) then return end
     end
-
-    local hits = math.max(1, config.hit_count or 1)
-    for h = 1, hits do
-        sendPacketRaw(not config.show_punch, {
-            type  = 3,
-            value = 18,
-            x     = p.posX,
-            y     = p.posY,
-            px    = tx,
-            py    = ty
-        })
+    for h = 1, math.max(1, config.hit_count) do
+        sendPacketRaw(not config.show_punch, { type = 3, value = 18, x = p.posX, y = p.posY, px = tx, py = ty })
         updateActionTime()
-
-        local delay = config.faster_break and math.max(80, config.delay_punch - 40) or config.delay_punch
-        ActionSleep(delay)
+        ActionSleep(config.faster_break and math.max(60, config.delay_punch - 40) or config.delay_punch)
     end
 end
 
@@ -431,128 +279,78 @@ local function placeBlock(tx, ty, item_id, is_plant)
     if not config.enable_place then return end
     local p = getPlayer()
     if not p then return end
-    sendPacketRaw(not config.show_punch, {
-        type  = 3,
-        value = item_id,
-        x     = p.posX,
-        y     = p.posY,
-        px    = tx,
-        py    = ty
-    })
+    sendPacketRaw(not config.show_punch, { type = 3, value = item_id, x = p.posX, y = p.posY, px = tx, py = ty })
     updateActionTime()
     ActionSleep(is_plant and config.delay_plant or config.delay_place)
 end
 
+-- TURBO WALKTO DINAMIS (Delay Jalan mengikuti Input "Delay Plant" User)
 local function walkTo(tx, ty)
     FindPath(tx, ty)
-    ActionSleep(250)
+    
+    -- Jeda ambil dari config.delay_plant, minimal 80ms biar ga nabrak server
+    local walk_delay = math.max(80, config.delay_plant)
+    Sleep(walk_delay) 
+    
     local cx, cy = getPlayerTile()
-    if cx and cy then
-        if (math.abs(cx - tx) <= 2 and math.abs(cy - ty) <= 2) then
-            updateActionTime()
-            return true
-        end
+    if cx and cy and (math.abs(cx - tx) <= 2 and math.abs(cy - ty) <= 2) then 
+        updateActionTime()
+        return true 
     end
     return false
 end
 
+-- TURBO COLLECT (Pungut kilat tanpa antre panjang)
 local function collectNearby(radius_px)
     local now = os.time()
     if (now - last_collect_time) < 1 then return end
     last_collect_time = now
-
-    radius_px = radius_px or 96
-    local p = getPlayer()
-    if not p then return end
-    local objs = safeGetObjects()
-    if not objs then return end
+    local p, objs = getPlayer(), safeGetObjects()
+    if not p or not objs then return end
+    local collected = false
     for _, obj in pairs(objs) do
-        if obj and obj.posX and obj.posY and obj.id then
-            local dx = math.abs(p.posX - obj.posX)
-            local dy = math.abs(p.posY - obj.posY)
-            if dx < radius_px and dy < radius_px then
-                sendPacketRaw(false, {
-                    type  = 11,
-                    value = obj.id,
-                    x     = obj.posX + 6,
-                    y     = 0
-                })
-                Sleep(20)
-            end
+        if obj and obj.posX and obj.id and math.abs(p.posX - obj.posX) < (radius_px or 96) and math.abs(p.posY - obj.posY) < (radius_px or 96) then
+            sendPacketRaw(false, { type = 11, value = obj.id, x = obj.posX + 6, y = 0 })
+            collected = true
         end
     end
+    if collected then Sleep(30) end 
 end
 
 local function getReadyHarvestTiles()
-    local tiles  = safeGetTiles()
-    local result = {}
-    if not tiles then return result end
-    for _, tile in pairs(tiles) do
-        if tile and tile.fg == seed_id then
-            if tile.readyharvest == true or tile.ready == true or tile.readyharvest == nil then
-                table.insert(result, {x = tile.x, y = tile.y})
-            end
-        end
-    end
-    table.sort(result, function(a, b)
-        if a.y ~= b.y then return a.y < b.y end
-        return a.x < b.x
-    end)
-    return result
+    local r, t = {}, safeGetTiles()
+    if t then for _, tile in pairs(t) do
+        if tile and tile.fg == seed_id and (tile.readyharvest == true or tile.ready == true or tile.readyharvest == nil) then table.insert(r, {x = tile.x, y = tile.y}) end
+    end end
+    table.sort(r, function(a, b) return a.y ~= b.y and a.y < b.y or a.x < b.x end)
+    return r
 end
 
 local function getPlantableTiles()
-    local tiles  = safeGetTiles()
-    local result = {}
-    if not tiles then return result end
-    for _, tile in pairs(tiles) do
+    local r, t = {}, safeGetTiles()
+    if t then for _, tile in pairs(t) do
         if tile and tile.fg == 0 then
-            local below = safeGetTile(tile.x, tile.y + 1)
-            if below and below.fg ~= 0 and below.fg ~= seed_id then
-                table.insert(result, {x = tile.x, y = tile.y})
-            end
+            local b = safeGetTile(tile.x, tile.y + 1)
+            if b and b.fg ~= 0 and b.fg ~= seed_id then table.insert(r, {x = tile.x, y = tile.y}) end
         end
-    end
-    table.sort(result, function(a, b)
-        if a.y ~= b.y then return a.y < b.y end
-        return a.x < b.x
-    end)
-    return result
+    end end
+    table.sort(r, function(a, b) return a.y ~= b.y and a.y < b.y or a.x < b.x end)
+    return r
 end
 
 local function doPlant(my_id)
-    if not config.enable_place then return end
-    if invCount(seed_id) < config.low_trigger then return end
-
+    if not config.enable_place or invCount(seed_id) < config.low_trigger then return end
     local plant_tiles = getPlantableTiles()
-    if #plant_tiles == 0 then return end
-
     for _, t in ipairs(plant_tiles) do
-        if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
-        
-        if checkPriorityDrop(my_id) then end
-        if invCount(seed_id) <= config.low_trigger then break end
-
+        if not isThreadActive(my_id) or not checkAntiPlayer(my_id) or checkPriorityDrop(my_id) or invCount(seed_id) <= config.low_trigger then return end
         local tile = safeGetTile(t.x, t.y)
-        if tile and tile.fg == 0 then
-            if walkTo(t.x, t.y) then
-                local retry = 0
-                while retry < config.pnb_retry do
-                    if not isThreadActive(my_id) then return end
-                    placeBlock(t.x, t.y, seed_id, true)
-
-                    if config.enable_anti_miss then
-                        local check_tile = safeGetTile(t.x, t.y)
-                        if check_tile and check_tile.fg == seed_id then
-                            break
-                        else
-                            retry = retry + 1
-                            ActionSleep(100)
-                        end
-                    else
-                        break
-                    end
-                end
+        if tile and tile.fg == 0 and walkTo(t.x, t.y) then
+            for retry = 1, config.pnb_retry do
+                placeBlock(t.x, t.y, seed_id, true)
+                if config.enable_anti_miss then
+                    local ck = safeGetTile(t.x, t.y)
+                    if ck and ck.fg == seed_id then break else ActionSleep(80) end
+                else break end
             end
         end
     end
@@ -560,221 +358,94 @@ end
 
 local function doHarvestLoop(my_id)
     local ready_tiles = getReadyHarvestTiles()
-    if #ready_tiles == 0 then return end
-
     for _, t in ipairs(ready_tiles) do
-        if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
-        
-        if checkPriorityDrop(my_id) then end
-        if invCount(config.block_id) >= config.high_trigger then break end
-
+        if not isThreadActive(my_id) or not checkAntiPlayer(my_id) or checkPriorityDrop(my_id) or invCount(config.block_id) >= config.high_trigger then return end
         local tile = safeGetTile(t.x, t.y)
-        if tile and tile.fg == seed_id then
-            local reached = walkTo(t.x, t.y)
-            if reached then
-                local retry = 0
-                while retry < config.pnb_retry do
-                    if not isThreadActive(my_id) then return end
-                    punchTile(t.x, t.y, seed_id)
-
-                    if config.enable_anti_miss then
-                        local check_tile = safeGetTile(t.x, t.y)
-                        if check_tile and check_tile.fg == 0 then
-                            break
-                        else
-                            retry = retry + 1
-                            ActionSleep(100)
-                        end
-                    else
-                        break
-                    end
-                end
-                collectNearby()
-                if checkPriorityDrop(my_id) then end
+        if tile and tile.fg == seed_id and walkTo(t.x, t.y) then
+            for retry = 1, config.pnb_retry do
+                punchTile(t.x, t.y, seed_id)
+                if config.enable_anti_miss then
+                    local ck = safeGetTile(t.x, t.y)
+                    if ck and ck.fg == 0 then break else ActionSleep(80) end
+                else break end
             end
+            collectNearby()
         end
     end
 end
 
+-- TURBO DROP (Cepat tapi masuk server)
 doTrashDrop = function(my_id, item_id, drop_x, drop_y)
     local count = invCount(item_id)
     if count <= 0 then return false end
-
-    local target_trash_world = (config.trash_drop_world and config.trash_drop_world ~= "") and config.trash_drop_world or getCurrentFarmWorld()
-    local ok_warp = warpToWorld(target_trash_world, config.trash_drop_door, my_id, true)
-    
-    if not ok_warp then
-        Log("Gagal warp ke Trash Storage World!")
-        return false
-    end
-
-    if not isThreadActive(my_id) then return false end
+    if not warpToWorld((config.trash_drop_world ~= "") and config.trash_drop_world or getCurrentFarmWorld(), config.trash_drop_door, my_id, true) then return false end
 
     local try_x = drop_x
-    local try_y = drop_y
-    local dropped = false
-    local max_shifts = 10
-
-    for i = 1, max_shifts do
-        if not isThreadActive(my_id) then break end
-        if try_x < 0 then break end
-
-        walkTo(try_x, try_y)
-        Sleep(300)
-
-        local before_count = invCount(item_id)
+    for i = 1, 10 do
+        if not isThreadActive(my_id) or try_x < 0 then break end
+        walkTo(try_x, drop_y)
+        Sleep(250) 
+        local before = invCount(item_id)
         sendPacket(2, "action|drop\nitemID|" .. item_id .. "\n")
-        Sleep(200)
+        Sleep(250) 
         sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. item_id .. "|\ncount|" .. count .. "\n")
-        Sleep(300)
+        Sleep(300) 
 
-        if invCount(item_id) < before_count then
-            dropped = true
-            updateActionTime()
-            Log("TRASH DROP Berhasil! Item ID: " .. item_id .. " (" .. count .. " pcs) di X=" .. try_x .. ", Y=" .. try_y)
+        if invCount(item_id) < before then
+            updateActionTime(); Log("TRASH DROP Berhasil: ID " .. item_id .. " (" .. count .. " pcs)")
             break
-        else
-            Log("Titik Trash X=" .. try_x .. " penuh/gagal drop. Coba mundur ke X=" .. (try_x - 1))
-            try_x = try_x - 1
-        end
+        else try_x = try_x - 1 end
     end
-
-    if not dropped then
-        Log("TRASH DROP gagal di semua titik percobaan!")
-    end
-
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
-    return dropped
+    return true
 end
 
 doDrop = function(my_id)
-    local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
-    if target_item == 0 then target_item = config.block_id end
+    local target = (config.drop_item_id > 0) and config.drop_item_id or (config.block_id > 0 and config.block_id or seed_id)
+    local total = invCount(target)
+    local amount = total - (target == seed_id and math.max(0, config.low_trigger) or 0)
+    if amount <= 0 or (amount < config.min_drop_amt and total < config.high_trigger) then return false end
 
-    local total_item = invCount(target_item)
-    if total_item <= 0 then return false end
-
-    local keep_amount = 0
-    if target_item == seed_id then
-        keep_amount = math.max(0, config.low_trigger or 10)
-    end
-    
-    local amount_to_drop = total_item - keep_amount
-
-    if amount_to_drop <= 0 then
-        Log("Tidak ada sisa item untuk di-drop (Menyisakan " .. keep_amount .. " cadangan).")
-        return false
-    end
-
-    if amount_to_drop < config.min_drop_amt and total_item < config.high_trigger then
-        Log("Jumlah item yang akan di-drop (" .. amount_to_drop .. ") kurang dari minimal (" .. config.min_drop_amt .. "). Batal warp storage.")
-        return false
-    end
-
-    if amount_to_drop > 200 then
-        amount_to_drop = 200
-    end
-
-    local target_drop_world = (config.drop_world and config.drop_world ~= "") and config.drop_world or getCurrentFarmWorld()
-
-    local ok_drop_warp = warpToWorld(target_drop_world, config.drop_door, my_id, true)
-    if not ok_drop_warp then
-        Log("Gagal warp ke Storage World! Batal drop item demi keamanan.")
-        return false
-    end
-
-    if not isThreadActive(my_id) then return false end
+    if not warpToWorld((config.drop_world ~= "") and config.drop_world or getCurrentFarmWorld(), config.drop_door, my_id, true) then return false end
 
     local try_x = config.drop_x
-    local try_y = config.drop_y
-    local dropped = false
-    local max_shifts = 10
+    for i = 1, 10 do
+        if not isThreadActive(my_id) or try_x < 0 then break end
+        walkTo(try_x, config.drop_y)
+        Sleep(250) 
+        local before = invCount(target)
+        sendPacket(2, "action|drop\nitemID|" .. target .. "\n")
+        Sleep(250) 
+        sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. target .. "|\ncount|" .. math.min(200, amount) .. "\n")
+        Sleep(300) 
 
-    for i = 1, max_shifts do
-        if not isThreadActive(my_id) then break end
-        if try_x < 0 then break end
-
-        walkTo(try_x, try_y)
-        Sleep(300)
-
-        local before_count = invCount(target_item)
-        sendPacket(2, "action|drop\nitemID|" .. target_item .. "\n")
-        Sleep(200)
-        sendPacket(2, "action|dialog_return\ndialog_name|drop_item\nitemID|" .. target_item .. "|\ncount|" .. amount_to_drop .. "\n")
-        Sleep(300)
-
-        if invCount(target_item) < before_count then
-            dropped = true
-            updateActionTime()
-            Log("DROP berhasil di X=" .. try_x .. ", Y=" .. try_y .. " (" .. amount_to_drop .. " item, menyisakan " .. invCount(target_item) .. ")")
-            
-            if try_x ~= config.drop_x then
-                config.drop_x = try_x
-                pref:set("drop_x", config.drop_x)
-                pref:save()
-                pcall(function() editValue("drop_x", config.drop_x) end)
-                Log("Titik Drop X diperbarui secara permanen ke X=" .. try_x)
-            end
+        if invCount(target) < before then
+            updateActionTime(); Log("DROP UTAMA Berhasil: ID " .. target .. " (" .. math.min(200, amount) .. " pcs)")
+            if try_x ~= config.drop_x then config.drop_x = try_x; pref:set("drop_x", try_x); pref:save(); pcall(editValue, "drop_x", try_x) end
             break
-        else
-            Log("Titik X=" .. try_x .. " penuh/gagal drop. Coba mundur ke X=" .. (try_x - 1))
-            try_x = try_x - 1
-        end
+        else try_x = try_x - 1 end
     end
-
-    if not dropped then
-        Log("DROP gagal di semua titik percobaan!")
-    end
-
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
-    return dropped
+    return true
 end
 
 local function getPnbTargets(cx, cy)
-    local mode = config.pnb_mode or 1
-    if mode == 2 then
-        return {
-            {x = cx - 1, y = cy - 1},
-            {x = cx,     y = cy - 1},
-            {x = cx + 1, y = cy - 1},
-        }
-    elseif mode == 3 then
-        return {
-            {x = cx, y = cy + 1},
-            {x = cx, y = cy + 2},
-        }
-    else
-        return {
-            {x = cx - 2, y = cy - 1},
-            {x = cx - 1, y = cy - 1},
-            {x = cx,     y = cy - 1},
-            {x = cx + 1, y = cy - 1},
-            {x = cx + 2, y = cy - 1},
-        }
-    end
+    if config.pnb_mode == 2 then return {{x=cx-1, y=cy-1}, {x=cx, y=cy-1}, {x=cx+1, y=cy-1}}
+    elseif config.pnb_mode == 3 then return {{x=cx, y=cy+1}, {x=cx, y=cy+2}}
+    else return {{x=cx-2, y=cy-1}, {x=cx-1, y=cy-1}, {x=cx, y=cy-1}, {x=cx+1, y=cy-1}, {x=cx+2, y=cy-1}} end
 end
 
+-- TURBO PNB (Nggak ada evaluasi bengong)
 local function doPnb(my_id)
-    Log("START PNB (Mode: " .. config.pnb_mode .. ")")
+    Log("START PNB Kilat")
     walkTo(config.pnb_x, config.pnb_y)
-    Sleep(300)
 
     while isThreadActive(my_id) do
-        if not checkAntiPlayer(my_id) then return end
-        
-        if checkPriorityDrop(my_id) then
-            walkTo(config.pnb_x, config.pnb_y)
-            Sleep(300)
-        end
-
-        if invCount(config.block_id) <= config.low_trigger then
-            return "low_block"
-        end
+        if not checkAntiPlayer(my_id) or checkPriorityDrop(my_id) or invCount(config.block_id) <= config.low_trigger then return end
 
         local cx, cy = getPlayerTile()
         if not cx or cx ~= config.pnb_x or cy ~= config.pnb_y then
             walkTo(config.pnb_x, config.pnb_y)
-            Sleep(300)
             cx, cy = getPlayerTile()
             if not cx then return end
         end
@@ -783,562 +454,188 @@ local function doPnb(my_id)
 
         if config.enable_place then
             for _, t in ipairs(targets) do
-                if not isThreadActive(my_id) then return end
                 if invCount(config.block_id) <= 0 then break end
                 local tile = safeGetTile(t.x, t.y)
-                if tile and tile.fg == 0 then
-                    placeBlock(t.x, t.y, config.block_id, false)
-                end
+                if tile and tile.fg == 0 then placeBlock(t.x, t.y, config.block_id, false) end
             end
         end
 
         if config.enable_break then
             while isThreadActive(my_id) do
-                local all_broken = true
+                local broken_all = true
                 for _, t in ipairs(targets) do
                     local cur = safeGetTile(t.x, t.y)
-                    if cur and cur.fg ~= 0 then
-                        all_broken = false
-                        punchTile(t.x, t.y, config.block_id)
-                    end
+                    if cur and cur.fg ~= 0 then broken_all = false; punchTile(t.x, t.y, config.block_id) end
                 end
-                if all_broken then break end
+                if broken_all then break end
             end
         end
-
         collectNearby()
-        checkPriorityDrop(my_id)
     end
 end
 
--- FIX UTAMA: WHILE LOOP AGAR PROSES 1 WORLD SAMPAI SELESAI TOTAL DULU
 local function processCurrentWorld(my_id)
     while isThreadActive(my_id) do
         if not checkAntiPlayer(my_id) then return false end
         applyModFly()
-        checkWatchdog(my_id)
 
-        checkPriorityDrop(my_id)
+        if checkPriorityDrop(my_id) then
+            Sleep(200)
+        else
+            local r_tiles, p_tiles, c_blocks, c_seeds = getReadyHarvestTiles(), getPlantableTiles(), invCount(config.block_id), invCount(seed_id)
+            if #r_tiles == 0 and (#p_tiles == 0 or c_seeds < config.low_trigger) and c_blocks <= config.low_trigger then return true end
 
-        local ready_tiles    = getReadyHarvestTiles()
-        local plant_tiles    = getPlantableTiles()
-        local current_blocks = invCount(config.block_id)
-        local current_seeds  = invCount(seed_id)
-
-        -- SYARAT BERSIH TOTAL BARU PINDAH WORLD:
-        -- 1. Pohon matang = 0
-        -- 2. Lahan kosong = 0 (atau Seed di tas < Low Trigger)
-        -- 3. Block di tas <= Low Trigger
-        if #ready_tiles == 0 and (#plant_tiles == 0 or current_seeds < config.low_trigger) and current_blocks <= config.low_trigger then
-            Log("`2[FINISH WORLD] World ini sudah bersih total! Pindah ke World Farm berikutnya...`0")
-            return true
+            if #r_tiles > 0 and c_blocks < config.high_trigger then doHarvestLoop(my_id) end
+            if invCount(config.block_id) >= config.high_trigger then doPnb(my_id) end
+            if #getPlantableTiles() > 0 and invCount(seed_id) >= config.low_trigger then doPlant(my_id) end
+            if invCount(config.block_id) > config.low_trigger then doPnb(my_id) end
+            Sleep(100)
         end
-
-        -- Step A: Panen pohon jika ada
-        if #ready_tiles > 0 and current_blocks < config.high_trigger then
-            Log("Panen Pohon...")
-            doHarvestLoop(my_id)
-            if not isThreadActive(my_id) then return false end
-        end
-
-        -- Step B: PnB block jika penuh/banyak
-        current_blocks = invCount(config.block_id)
-        if current_blocks >= config.high_trigger then
-            Log("PnB Block...")
-            doPnb(my_id)
-            if not isThreadActive(my_id) then return false end
-        end
-
-        -- Step C: Tanam seed ke lahan kosong
-        plant_tiles   = getPlantableTiles()
-        current_seeds = invCount(seed_id)
-        if #plant_tiles > 0 and current_seeds >= config.low_trigger then
-            Log("Tanam Seed...")
-            doPlant(my_id)
-            if not isThreadActive(my_id) then return false end
-        end
-
-        -- Step D: PnB sisa block yang terkumpul
-        current_blocks = invCount(config.block_id)
-        if current_blocks > config.low_trigger then
-            Log("PnB Sisa Block...")
-            doPnb(my_id)
-            if not isThreadActive(my_id) then return false end
-        end
-
-        Sleep(300)
     end
     return false
 end
 
-local function reconnectMonitor(my_id)
-    local retry_delay = 5000
-    while running and (thread_instance == my_id) do
-        Sleep(3000)
-        local p = getPlayer()
-        local w = safeGetWorldName()
-        if not p or not w then
-            reconnecting = true
-            Log("`4[DISCONNECT] Mencoba reconnecting ke world...")
-            
-            while running and (thread_instance == my_id) do
-                Sleep(retry_delay)
-                local target_w = getCurrentFarmWorld()
-                local ok = warpToWorld(target_w, config.farm_door, my_id, true)
-                if ok then
-                    Log("Berhasil reconnect ke world " .. tostring(target_w))
-                    retry_delay = 5000
-                    break
-                else
-                    retry_delay = math.min(60000, retry_delay + 5000)
-                    Log("Gagal reconnect, mencoba lagi dalam " .. math.floor(retry_delay / 1000) .. " detik...")
-                end
-            end
-            reconnecting = false
-        end
-    end
-end
-
-local function onConsoleMessage(msg)
-    if running and type(msg) == "string" then
-        local lower = string.lower(msg)
-        if string.find(lower, "mod") or string.find(lower, "suspended") or string.find(lower, "maintenance") then
-            Log("`4[ALERT CONSOLE] Pesan bahaya terdeteksi: " .. msg)
-            pcall(function() growtopia.warpTo("EXIT") end)
-        end
-    end
-end
-
-local function onVariant(var, pkt)
-    if running and var and var.v1 == "OnDialogRequest" then
-        if type(var.v2) == "string" and string.find(var.v2, "drop_item") then
-            return true
-        end
-    end
-end
-
 local function mainLoop(my_id)
     math.randomseed(os.time())
+    seed_id = (config.seed_id and config.seed_id > 0) and config.seed_id or (config.block_id + 1)
+    session_start_time, last_action_time = os.time(), os.time()
+    updateActiveTrashList(); randomizeTimers()
+    farm_world_list, current_farm_index = parseWorldList(config.farm_world), 1
+    if #farm_world_list == 0 then local cw = safeGetWorldName(); if cw then table.insert(farm_world_list, cw) end end
 
-    seed_id            = (config.seed_id and config.seed_id > 0) and config.seed_id or (config.block_id + 1)
-    reconnecting       = false
-    action_count       = 0
-    gc_counter         = 0
-    session_start_time = os.time()
-    last_action_time   = os.time()
-
-    randomizeTimers()
-
-    farm_world_list    = parseWorldList(config.farm_world)
-    current_farm_index = 1
-
-    if #farm_world_list == 0 then
-        local cw = safeGetWorldName()
-        if cw then table.insert(farm_world_list, cw) end
-    end
-
-    Log("ROTASI 24/7 MULAI! Total Farm World: " .. #farm_world_list .. " | Block ID: " .. config.block_id .. " | Seed ID: " .. seed_id)
-
-    runThread(function() reconnectMonitor(my_id) end)
+    Log("ROTASI TURBO MULAI!")
 
     while isThreadActive(my_id) do
         checkWorkRestCycle(my_id)
         if not checkAntiPlayer(my_id) then break end
-
-        local target_farm = getCurrentFarmWorld()
-        local ok_farm = warpToWorld(target_farm, config.farm_door, my_id, true)
-
-        if ok_farm then
-            local finished_world = processCurrentWorld(my_id)
-            if not isThreadActive(my_id) then break end
-
-            if finished_world then
-                nextFarmWorld()
-            end
-        else
-            Log("Gagal warp ke Farm World: " .. target_farm .. ", mencoba ke world berikutnya...")
-            nextFarmWorld()
-        end
-
+        local t_farm = getCurrentFarmWorld()
+        if warpToWorld(t_farm, config.farm_door, my_id, true) then
+            if processCurrentWorld(my_id) then nextFarmWorld() end
+        else nextFarmWorld() end
         Sleep(200)
     end
 end
 
-local ui = UserInterface.new("Auto Rotasi 24/7", "Ability")
+-- =========================================================
+-- UI "FAMILY USER" MENGGUNAKAN ADDINTOMODULE
+-- =========================================================
+local ui = UserInterface.new("Auto Rotasi", "Verified")[cite: 5]
 
-ui:addLabelApp("AUTO ROTASI 24/7 BY LOLISTORE", "Ability")
-ui:addDivider()
+ui:addLabelApp("AUTO ROTASI 24/7 (TURBO)", "Verified")[cite: 5]
+ui:addDivider()[cite: 5]
 
-local dialog_main = ui:addDialog("Main Config", "Setting utama rotasi", {})
-ui:addChildInputInt(dialog_main.menu,    "Block ID",         config.block_id,     "ID",    "ID block yang di-farm",              "Verified", "block_id")
-ui:addChildInputInt(dialog_main.menu,    "Seed ID",          config.seed_id,      "ID",    "ID seed (0 = otomatis Block ID + 1)","Verified", "seed_id")
-ui:addChildInputString(dialog_main.menu, "Farm World",       config.farm_world,   "World", "FARM1,FARM2 (pisahkan koma)",        "World",    "farm_world")
-ui:addChildInputString(dialog_main.menu, "Farm Door",        config.farm_door,    "ID",    "ID door universal world farm",       "World",    "farm_door")
-ui:addChildInputInt(dialog_main.menu,    "High Trigger",     config.high_trigger, "amt",   "item>=ini->Drop (def:180)",          "Verified", "high_trigger")
-ui:addChildInputInt(dialog_main.menu,    "Low Trigger",      config.low_trigger,  "amt",   "block/seed<=ini->stop (def:10)",     "Verified", "low_trigger")
+local menu_utama = ui:addDialog("1. Pengaturan Utama", "Set Block, Seed, & World", {})[cite: 5]
+ui:addChildInputInt(menu_utama.menu, "Block ID", config.block_id, "ID", "Contoh: 340", "Verified", "block_id")[cite: 5]
+ui:addChildInputInt(menu_utama.menu, "Seed ID", config.seed_id, "ID", "0 = Otomatis", "Verified", "seed_id")[cite: 5]
+ui:addChildInputString(menu_utama.menu, "World Farm", config.farm_world, "World", "FARM1,FARM2", "World", "farm_world")[cite: 5]
+ui:addChildInputString(menu_utama.menu, "Door Farm", config.farm_door, "ID", "Pintu Masuk", "World", "farm_door")[cite: 5]
 
-ui:addDivider()
+local menu_storage = ui:addDialog("2. Target & Storage", "Kapan bot drop item?", {})[cite: 5]
+ui:addChildInputInt(menu_storage.menu, "Batas Penuh (High)", config.high_trigger, "Pcs", "Drop tas > ini", "Verified", "high_trigger")[cite: 5]
+ui:addChildInputInt(menu_storage.menu, "Batas Habis (Low)", config.low_trigger, "Pcs", "Stop tas < ini", "Verified", "low_trigger")[cite: 5]
+ui:addChildInputString(menu_storage.menu, "World Storage", config.drop_world, "World", "Kumpul hasil", "World", "drop_world")[cite: 5]
+ui:addChildInputString(menu_storage.menu, "Door Storage", config.drop_door, "ID", "Pintu drop", "World", "drop_door")[cite: 5]
+ui:addChildButton(menu_storage.menu, "Set Posisi Drop Saat Ini", "btn_drop_set")[cite: 5]
 
-local dialog_autofarm = ui:addDialog("Autofarm & PnB Settings", "Pengaturan aksi Break, Place & PnB", {})
-ui:addChildToggle(dialog_autofarm.menu,   "Verify before punch", config.enable_verify_punch, "enable_verify_punch")
-ui:addChildToggle(dialog_autofarm.menu,   "Break",               config.enable_break,        "enable_break")
-ui:addChildToggle(dialog_autofarm.menu,   "Place",               config.enable_place,        "enable_place")
-ui:addChildInputInt(dialog_autofarm.menu, "Hit Count",           config.hit_count,           "cnt", "Pukulan per siklus (def:1)", "Verified", "hit_count")
-ui:addChildInputInt(dialog_autofarm.menu, "PnB X",               config.pnb_x,                "X", "Koordinat PnB X", "Verified", "pnb_x")
-ui:addChildInputInt(dialog_autofarm.menu, "PnB Y",               config.pnb_y,                "Y", "Koordinat PnB Y", "Verified", "pnb_y")
-ui:addChildButton(dialog_autofarm.menu,   "Set PnB Posisi Sekarang", "btn_pnb_set")
-ui:addChildInputInt(dialog_autofarm.menu, "PnB Pattern Mode",    config.pnb_mode,            "Mode", "1: 5-Tile Top | 2: 3-Tile Top | 3: 2-Tile Bottom", "Verified", "pnb_mode")
+local menu_pnb = ui:addDialog("3. Pengaturan PnB & Speed", "Titik & Waktu Delay", {})[cite: 5]
+ui:addChildInputInt(menu_pnb.menu, "PnB Pos X", config.pnb_x, "X", "Koordinat X", "Verified", "pnb_x")[cite: 5]
+ui:addChildInputInt(menu_pnb.menu, "PnB Pos Y", config.pnb_y, "Y", "Koordinat Y", "Verified", "pnb_y")[cite: 5]
+ui:addChildButton(menu_pnb.menu, "Set Posisi PnB Saat Ini", "btn_pnb_set")[cite: 5]
+ui:addChildInputInt(menu_pnb.menu, "Delay Break (ms)", config.delay_punch, "ms", "Default: 150", "Verified", "delay_punch")[cite: 5]
+ui:addChildInputInt(menu_pnb.menu, "Delay Place (ms)", config.delay_place, "ms", "Default: 80", "Verified", "delay_place")[cite: 5]
+ui:addChildInputInt(menu_pnb.menu, "Delay Plant/Jalan (ms)", config.delay_plant, "ms", "Default: 100", "Verified", "delay_plant")[cite: 5]
 
-ui:addDivider()
+local menu_aman = ui:addDialog("4. Keamanan & Jeda", "Fitur Anti-Ban", {})[cite: 5]
+ui:addChildToggle(menu_aman.menu, "Smart Delay (Aman)", config.enable_smart_delay, "enable_smart_delay")[cite: 5]
+ui:addChildToggle(menu_aman.menu, "Anti Player / Mod", config.enable_anti_player, "enable_anti_player")[cite: 5]
+ui:addChildToggle(menu_aman.menu, "Aktifkan Mod Fly", config.enable_fly, "enable_fly")[cite: 5]
 
-local dialog_delay = ui:addDialog("Delay & Speed Settings", "Pengaturan kecepatan aksi (ms)", {})
-ui:addChildInputInt(dialog_delay.menu, "Delay Break (ms)",   config.delay_punch,        "ms", "Delay memukul block (def: 180)", "Verified", "delay_punch")
-ui:addChildInputInt(dialog_delay.menu, "Delay Place (ms)",   config.delay_place,        "ms", "Delay menaruh block (def: 80)",   "Verified", "delay_place")
-ui:addChildInputInt(dialog_delay.menu, "Harvest Delay (ms)", config.delay_harvest,      "ms", "Delay memanen pohon (def: 180)", "Verified", "delay_harvest")
-ui:addChildInputInt(dialog_delay.menu, "Plant Delay (ms)",   config.delay_plant,        "ms", "Delay menanam seed (def: 120)",  "Verified", "delay_plant")
-ui:addChildToggle(dialog_delay.menu,   "Faster Break (Turbo)", config.faster_break,      "faster_break")
-ui:addChildToggle(dialog_delay.menu,   "Safe Delay Guard",   config.enable_safe_delay,  "enable_safe_delay")
-ui:addChildToggle(dialog_delay.menu,   "Smart Delay",        config.enable_smart_delay, "enable_smart_delay")
-ui:addChildToggle(dialog_delay.menu,   "Anti Miss (Wait)",   config.enable_anti_miss,   "enable_anti_miss")
+local menu_trash = ui:addDialog("5. Buang Sampah", "Setting buang sampah", {})[cite: 5]
+ui:addChildToggle(menu_trash.menu, "Aktifkan Buang Sampah", config.enable_trash_drop, "enable_trash_drop")[cite: 5]
+ui:addChildInputString(menu_trash.menu, "World Sampah", config.trash_drop_world, "World", "World buang", "World", "trash_drop_world")[cite: 5]
 
-ui:addDivider()
-
-local dialog_drop = ui:addDialog("Seed / Block Drop Config", "Posisi & World drop seed/block utama", {})
-ui:addChildInputString(dialog_drop.menu, "Drop World",      config.drop_world,   "World", "World tempat drop (kosongkan jika sama)", "World",    "drop_world")
-ui:addChildInputString(dialog_drop.menu, "Drop Door",       config.drop_door,    "ID",     "ID door world drop",                      "World",    "drop_door")
-ui:addChildInputInt(dialog_drop.menu,    "Drop Item ID",    config.drop_item_id, "ID",     "ID item yang di-drop (0 = otomatis seed)", "Verified", "drop_item_id")
-ui:addChildInputInt(dialog_drop.menu,    "Minimal Drop Amt", config.min_drop_amt,  "amt",    "Min item di-drop biar ga sia-sia (def:20)", "Verified", "min_drop_amt")
-ui:addChildInputInt(dialog_drop.menu,    "Drop X",          config.drop_x,       "X",      "koordinat X drop",                        "Verified", "drop_x")
-ui:addChildInputInt(dialog_drop.menu,    "Drop Y",          config.drop_y,       "Y",      "koordinat Y drop",                        "Verified", "drop_y")
-ui:addChildButton(dialog_drop.menu, "Set dari posisi sekarang", "btn_drop_set")
-
-ui:addDivider()
-
-local dialog_trash_main = ui:addDialog("Trash Drop Settings", "Pengaturan World/Door Sampah (Shared)", {})
-ui:addChildToggle(dialog_trash_main.menu,      "Enable Auto Trash Drop", config.enable_trash_drop, "enable_trash_drop")
-ui:addChildInputString(dialog_trash_main.menu, "Trash Drop World",      config.trash_drop_world,  "World", "World khusus trash (kosong = world skrg)", "World", "trash_drop_world")
-ui:addChildInputString(dialog_trash_main.menu, "Trash Drop Door",       config.trash_drop_door,   "ID", "Door ID trash world", "World", "trash_drop_door")
-
-for i, item in ipairs(trash_defaults) do
-    local dialog_item = ui:addDialog(i .. ". " .. item.name, "Config khusus " .. item.name, {})
-    ui:addChildToggle(dialog_item.menu,   "Enable " .. item.name,  config["trash_"..i.."_enable"], "trash_"..i.."_enable")
-    ui:addChildInputInt(dialog_item.menu, "Item ID",              config["trash_"..i.."_id"],     "ID",  "ID item", "Verified", "trash_"..i.."_id")
-    ui:addChildInputInt(dialog_item.menu, "Min Trash Count",      config["trash_"..i.."_count"],  "amt", "Min item di inventory lalu di-drop", "Verified", "trash_"..i.."_count")
-    ui:addChildInputInt(dialog_item.menu, "Drop X",               config["trash_"..i.."_x"],      "X",   "Koordinat X drop", "Verified", "trash_"..i.."_x")
-    ui:addChildInputInt(dialog_item.menu, "Drop Y",               config["trash_"..i.."_y"],      "Y",   "Koordinat Y drop", "Verified", "trash_"..i.."_y")
-    ui:addChildButton(dialog_item.menu,   "Set " .. item.name .. " Posisi Sekarang", "btn_trash_"..i.."_set")
-end
-
-ui:addDivider()
-
-local dialog_sec = ui:addDialog("Security & Anti-Ban", "Proteksi akun 24/7", {})
-ui:addChildToggle(dialog_sec.menu,      "Anti Player/Mod",      config.enable_anti_player, "enable_anti_player")
-ui:addChildInputInt(dialog_sec.menu,    "Anti Player CD (detik)", config.anti_player_cd,   "sec", "Cooldown nunggu player pergi",        "Verified", "anti_player_cd")
-ui:addChildToggle(dialog_sec.menu,      "Mod Fly",              config.enable_fly,         "enable_fly")
-ui:addChildToggle(dialog_sec.menu,      "Show Punch (Visual)",  config.show_punch,         "show_punch")
-ui:addChildInputInt(dialog_sec.menu,    "Jam Kerja (Menit)",    config.work_min,           "min", "Durasi kerja sebelum istirahat",        "Verified", "work_min")
-ui:addChildInputInt(dialog_sec.menu,    "Jam Istirahat (Menit)", config.rest_min,          "min", "Durasi istirahat/AFK",                "Verified", "rest_min")
-ui:addChildToggle(dialog_sec.menu,      "Human Micro-Jitter",   config.enable_jitter,      "enable_jitter")
-
-ui:addDivider()
-ui:addButton("Apply Config", "btn_apply")
-ui:addDivider()
-ui:addToggleButton("Start / Stop", false, "btn_start")
+ui:addDivider()[cite: 5]
+ui:addButton("SIMPAN PENGATURAN", "btn_apply")[cite: 5]
+ui:addDivider()[cite: 5]
+ui:addToggleButton("▶ MULAI / BERHENTI ⏹", false, "btn_start")[cite: 5]
 
 local temp = {
-    block_id             = tostring(config.block_id),
-    seed_id              = tostring(config.seed_id),
-    high_trigger         = tostring(config.high_trigger),
-    low_trigger          = tostring(config.low_trigger),
-    farm_world           = config.farm_world,
-    farm_door            = config.farm_door,
-    drop_world           = config.drop_world,
-    drop_door            = config.drop_door,
-    drop_item_id         = tostring(config.drop_item_id),
-    min_drop_amt         = tostring(config.min_drop_amt),
-    pnb_x                = tostring(config.pnb_x),
-    pnb_y                = tostring(config.pnb_y),
-    pnb_mode             = tostring(config.pnb_mode),
-    enable_verify_punch  = config.enable_verify_punch,
-    enable_break         = config.enable_break,
-    enable_place         = config.enable_place,
-    hit_count            = tostring(config.hit_count),
-    faster_break         = config.faster_break,
-    drop_x               = tostring(config.drop_x),
-    drop_y               = tostring(config.drop_y),
-    
-    enable_trash_drop    = config.enable_trash_drop,
-    trash_drop_world     = config.trash_drop_world,
-    trash_drop_door      = config.trash_drop_door,
-
-    enable_anti_player   = config.enable_anti_player,
-    anti_player_cd       = tostring(config.anti_player_cd),
-    enable_fly           = config.enable_fly,
-    show_punch           = config.show_punch,
-    work_min             = tostring(config.work_min),
-    rest_min             = tostring(config.rest_min),
-    enable_jitter        = config.enable_jitter,
-    delay_place          = tostring(config.delay_place),
-    delay_punch          = tostring(config.delay_punch),
-    delay_harvest        = tostring(config.delay_harvest),
-    delay_plant          = tostring(config.delay_plant),
-    enable_safe_delay    = config.enable_safe_delay,
-    enable_smart_delay   = config.enable_smart_delay,
-    enable_anti_miss     = config.enable_anti_miss,
+    block_id = tostring(config.block_id), seed_id = tostring(config.seed_id),
+    high_trigger = tostring(config.high_trigger), low_trigger = tostring(config.low_trigger),
+    farm_world = config.farm_world, farm_door = config.farm_door,
+    drop_world = config.drop_world, drop_door = config.drop_door,
+    pnb_x = tostring(config.pnb_x), pnb_y = tostring(config.pnb_y),
+    enable_trash_drop = config.enable_trash_drop, trash_drop_world = config.trash_drop_world,
+    enable_smart_delay = config.enable_smart_delay, enable_anti_player = config.enable_anti_player,
+    enable_fly = config.enable_fly, delay_punch = tostring(config.delay_punch), delay_place = tostring(config.delay_place),
+    delay_plant = tostring(config.delay_plant)
 }
-
-for i, _ in ipairs(trash_defaults) do
-    temp["trash_"..i.."_enable"] = config["trash_"..i.."_enable"]
-    temp["trash_"..i.."_id"]     = tostring(config["trash_"..i.."_id"])
-    temp["trash_"..i.."_count"]  = tostring(config["trash_"..i.."_count"])
-    temp["trash_"..i.."_x"]      = tostring(config["trash_"..i.."_x"])
-    temp["trash_"..i.."_y"]      = tostring(config["trash_"..i.."_y"])
-end
 
 function OnDraw(d)
     removeHook("onDraw")
     runCoroutine(function()
         Sleep(2000)
-        addIntoModule(ui:generateJSON(), "Farm")
+        addIntoModule(ui:generateJSON(), "Farm")[cite: 4, 5]
     end)
 end
 
 function OnValue(type, name, value)
-    if     name == "block_id"            then temp.block_id            = tostring(value)
-    elseif name == "seed_id"             then temp.seed_id             = tostring(value)
-    elseif name == "high_trigger"        then temp.high_trigger        = tostring(value)
-    elseif name == "low_trigger"         then temp.low_trigger         = tostring(value)
-    elseif name == "farm_world"          then temp.farm_world          = value
-    elseif name == "farm_door"           then temp.farm_door           = value
-    elseif name == "drop_world"          then temp.drop_world          = value
-    elseif name == "drop_door"           then temp.drop_door           = value
-    elseif name == "drop_item_id"        then temp.drop_item_id        = tostring(value)
-    elseif name == "min_drop_amt"        then temp.min_drop_amt        = tostring(value)
-    elseif name == "pnb_x"               then temp.pnb_x               = tostring(value)
-    elseif name == "pnb_y"               then temp.pnb_y               = tostring(value)
-    elseif name == "pnb_mode"            then temp.pnb_mode            = tostring(value)
-    elseif name == "enable_verify_punch" then temp.enable_verify_punch = value
-    elseif name == "enable_break"        then temp.enable_break        = value
-    elseif name == "enable_place"        then temp.enable_place        = value
-    elseif name == "hit_count"           then temp.hit_count           = tostring(value)
-    elseif name == "faster_break"        then temp.faster_break        = value
-    elseif name == "drop_x"              then temp.drop_x              = tostring(value)
-    elseif name == "drop_y"              then temp.drop_y              = tostring(value)
-    
-    elseif name == "enable_trash_drop"   then temp.enable_trash_drop   = value
-    elseif name == "trash_drop_world"    then temp.trash_drop_world    = value
-    elseif name == "trash_drop_door"     then temp.trash_drop_door     = value
+    if name == "block_id" then temp.block_id = tostring(value)
+    elseif name == "seed_id" then temp.seed_id = tostring(value)
+    elseif name == "farm_world" then temp.farm_world = value
+    elseif name == "farm_door" then temp.farm_door = value
+    elseif name == "high_trigger" then temp.high_trigger = tostring(value)
+    elseif name == "low_trigger" then temp.low_trigger = tostring(value)
+    elseif name == "drop_world" then temp.drop_world = value
+    elseif name == "drop_door" then temp.drop_door = value
+    elseif name == "pnb_x" then temp.pnb_x = tostring(value)
+    elseif name == "pnb_y" then temp.pnb_y = tostring(value)
+    elseif name == "enable_trash_drop" then temp.enable_trash_drop = value
+    elseif name == "trash_drop_world" then temp.trash_drop_world = value
+    elseif name == "enable_smart_delay" then temp.enable_smart_delay = value
+    elseif name == "enable_anti_player" then temp.enable_anti_player = value
+    elseif name == "enable_fly" then temp.enable_fly = value
+    elseif name == "delay_punch" then temp.delay_punch = tostring(value)
+    elseif name == "delay_place" then temp.delay_place = tostring(value)
+    elseif name == "delay_plant" then temp.delay_plant = tostring(value)
 
-    elseif name == "enable_anti_player"  then temp.enable_anti_player  = value
-    elseif name == "anti_player_cd"      then temp.anti_player_cd      = tostring(value)
-    elseif name == "enable_fly"          then temp.enable_fly          = value
-    elseif name == "show_punch"          then temp.show_punch          = value
-    elseif name == "work_min"            then temp.work_min            = tostring(value)
-    elseif name == "rest_min"            then temp.rest_min            = tostring(value)
-    elseif name == "enable_jitter"       then temp.enable_jitter       = value
-    elseif name == "delay_place"         then temp.delay_place         = tostring(value)
-    elseif name == "delay_punch"         then temp.delay_punch         = tostring(value)
-    elseif name == "delay_harvest"       then temp.delay_harvest       = tostring(value)
-    elseif name == "delay_plant"         then temp.delay_plant         = tostring(value)
-    elseif name == "enable_safe_delay"   then temp.enable_safe_delay   = value
-    elseif name == "enable_smart_delay"  then temp.enable_smart_delay  = value
-    elseif name == "enable_anti_miss"    then temp.enable_anti_miss    = value
-    end
-
-    for i, item in ipairs(trash_defaults) do
-        if name == "trash_"..i.."_enable" then
-            temp["trash_"..i.."_enable"] = value
-        elseif name == "trash_"..i.."_id" then
-            temp["trash_"..i.."_id"]     = tostring(value)
-        elseif name == "trash_"..i.."_count" then
-            temp["trash_"..i.."_count"]  = tostring(value)
-        elseif name == "trash_"..i.."_x" then
-            temp["trash_"..i.."_x"]      = tostring(value)
-        elseif name == "trash_"..i.."_y" then
-            temp["trash_"..i.."_y"]      = tostring(value)
-        elseif name == "btn_trash_"..i.."_set" then
-            local p = getPlayer()
-            if p then
-                local cx = math.floor(p.posX / 32)
-                local cy = math.floor(p.posY / 32)
-                temp["trash_"..i.."_x"]   = tostring(cx)
-                temp["trash_"..i.."_y"]   = tostring(cy)
-                config["trash_"..i.."_x"] = cx
-                config["trash_"..i.."_y"] = cy
-                editValue("trash_"..i.."_x", cx)
-                editValue("trash_"..i.."_y", cy)
-                growtopia.notify(item.name .. " Drop set: X=" .. cx .. " Y=" .. cy)
-            end
-        end
-    end
-
-    if name == "btn_pnb_set" then
+    elseif name == "btn_pnb_set" then
         local p = getPlayer()
-        if p then
-            local cx = math.floor(p.posX / 32)
-            local cy = math.floor(p.posY / 32)
-            temp.pnb_x   = tostring(cx)
-            temp.pnb_y   = tostring(cy)
-            config.pnb_x = cx
-            config.pnb_y = cy
-            editValue("pnb_x", cx)
-            editValue("pnb_y", cy)
-            growtopia.notify("PnB set: X=" .. cx .. " Y=" .. cy)
-        end
-
+        if p then local cx, cy = math.floor(p.posX / 32), math.floor(p.posY / 32); temp.pnb_x, temp.pnb_y = tostring(cx), tostring(cy); config.pnb_x, config.pnb_y = cx, cy; editValue("pnb_x", cx); editValue("pnb_y", cy); growtopia.notify("PnB set: X="..cx.." Y="..cy) end
     elseif name == "btn_drop_set" then
         local p = getPlayer()
-        if p then
-            local cx = math.floor(p.posX / 32)
-            local cy = math.floor(p.posY / 32)
-            temp.drop_x   = tostring(cx)
-            temp.drop_y   = tostring(cy)
-            config.drop_x = cx
-            config.drop_y = cy
-            editValue("drop_x", cx)
-            editValue("drop_y", cy)
-            growtopia.notify("Drop set: X=" .. cx .. " Y=" .. cy)
-        end
+        if p then local cx, cy = math.floor(p.posX / 32), math.floor(p.posY / 32); temp.drop_x, temp.drop_y = tostring(cx), tostring(cy); config.drop_x, config.drop_y = cx, cy; editValue("drop_x", cx); editValue("drop_y", cy); pref:set("drop_x", cx); pref:set("drop_y", cy); growtopia.notify("Drop set: X="..cx.." Y="..cy) end
 
     elseif name == "btn_apply" then
-        config.block_id           = tonumber(temp.block_id)            or config.block_id
-        config.seed_id            = tonumber(temp.seed_id)             or config.seed_id
-        config.high_trigger       = tonumber(temp.high_trigger)        or config.high_trigger
-        config.low_trigger        = tonumber(temp.low_trigger)         or config.low_trigger
-        config.farm_world         = temp.farm_world
-        config.farm_door          = temp.farm_door
-        config.drop_world         = temp.drop_world
-        config.drop_door          = temp.drop_door
-        config.drop_item_id       = tonumber(temp.drop_item_id)        or config.drop_item_id
-        config.min_drop_amt       = tonumber(temp.min_drop_amt)        or config.min_drop_amt
-        config.pnb_x              = tonumber(temp.pnb_x)               or config.pnb_x
-        config.pnb_y              = tonumber(temp.pnb_y)               or config.pnb_y
-        config.pnb_mode           = tonumber(temp.pnb_mode)            or config.pnb_mode
-        config.enable_verify_punch= temp.enable_verify_punch
-        config.enable_break       = temp.enable_break
-        config.enable_place       = temp.enable_place
-        config.hit_count          = tonumber(temp.hit_count)           or config.hit_count
-        config.faster_break       = temp.faster_break
-        config.drop_x             = tonumber(temp.drop_x)              or config.drop_x
-        config.drop_y             = tonumber(temp.drop_y)              or config.drop_y
-        
-        config.enable_trash_drop  = temp.enable_trash_drop
-        config.trash_drop_world   = temp.trash_drop_world
-        config.trash_drop_door    = temp.trash_drop_door
+        config.block_id, config.seed_id = tonumber(temp.block_id) or 0, tonumber(temp.seed_id) or 0
+        config.high_trigger, config.low_trigger = tonumber(temp.high_trigger) or 180, tonumber(temp.low_trigger) or 10
+        config.farm_world, config.farm_door = temp.farm_world, temp.farm_door
+        config.drop_world, config.drop_door = temp.drop_world, temp.drop_door
+        config.pnb_x, config.pnb_y = tonumber(temp.pnb_x) or 0, tonumber(temp.pnb_y) or 0
+        config.enable_trash_drop, config.trash_drop_world = temp.enable_trash_drop, temp.trash_drop_world
+        config.enable_smart_delay, config.enable_anti_player, config.enable_fly = temp.enable_smart_delay, temp.enable_anti_player, temp.enable_fly
+        config.delay_punch, config.delay_place = tonumber(temp.delay_punch) or 150, tonumber(temp.delay_place) or 80
+        config.delay_plant = tonumber(temp.delay_plant) or 100
 
-        for i, _ in ipairs(trash_defaults) do
-            config["trash_"..i.."_enable"] = temp["trash_"..i.."_enable"]
-            config["trash_"..i.."_id"]     = tonumber(temp["trash_"..i.."_id"])     or config["trash_"..i.."_id"]
-            config["trash_"..i.."_count"]  = tonumber(temp["trash_"..i.."_count"])  or config["trash_"..i.."_count"]
-            config["trash_"..i.."_x"]      = tonumber(temp["trash_"..i.."_x"])      or config["trash_"..i.."_x"]
-            config["trash_"..i.."_y"]      = tonumber(temp["trash_"..i.."_y"])      or config["trash_"..i.."_y"]
-
-            pref:set("trash_"..i.."_enable", config["trash_"..i.."_enable"])
-            pref:set("trash_"..i.."_id",     config["trash_"..i.."_id"])
-            pref:set("trash_"..i.."_count",  config["trash_"..i.."_count"])
-            pref:set("trash_"..i.."_x",      config["trash_"..i.."_x"])
-            pref:set("trash_"..i.."_y",      config["trash_"..i.."_y"])
-        end
-
-        config.enable_anti_player = temp.enable_anti_player
-        config.anti_player_cd     = tonumber(temp.anti_player_cd)        or config.anti_player_cd
-        config.enable_fly         = temp.enable_fly
-        config.show_punch         = temp.show_punch
-        config.work_min           = tonumber(temp.work_min)            or config.work_min
-        config.rest_min           = tonumber(temp.rest_min)            or config.rest_min
-        config.enable_jitter      = temp.enable_jitter
-        config.delay_place        = tonumber(temp.delay_place)         or config.delay_place
-        config.delay_punch        = tonumber(temp.delay_punch)         or config.delay_punch
-        config.delay_harvest      = tonumber(temp.delay_harvest)       or config.delay_harvest
-        config.delay_plant        = tonumber(temp.delay_plant)         or config.delay_plant
-        config.enable_safe_delay  = temp.enable_safe_delay
-        config.enable_smart_delay = temp.enable_smart_delay
-        config.enable_anti_miss   = temp.enable_anti_miss
-
-        seed_id = (config.seed_id and config.seed_id > 0) and config.seed_id or (config.block_id + 1)
-
-        pref:set("block_id",            config.block_id)
-        pref:set("seed_id",             config.seed_id)
-        pref:set("high_trigger",        config.high_trigger)
-        pref:set("low_trigger",         config.low_trigger)
-        pref:set("farm_world",          config.farm_world)
-        pref:set("farm_door",           config.farm_door)
-        pref:set("drop_world",          config.drop_world)
-        pref:set("drop_door",           config.drop_door)
-        pref:set("drop_item_id",        config.drop_item_id)
-        pref:set("min_drop_amt",        config.min_drop_amt)
-        pref:set("pnb_x",               config.pnb_x)
-        pref:set("pnb_y",               config.pnb_y)
-        pref:set("pnb_mode",            config.pnb_mode)
-        pref:set("enable_verify_punch", config.enable_verify_punch)
-        pref:set("enable_break",        config.enable_break)
-        pref:set("enable_place",        config.enable_place)
-        pref:set("hit_count",           config.hit_count)
-        pref:set("faster_break",        config.faster_break)
-        pref:set("drop_x",              config.drop_x)
-        pref:set("drop_y",              config.drop_y)
-        
-        pref:set("enable_trash_drop",   config.enable_trash_drop)
-        pref:set("trash_drop_world",    config.trash_drop_world)
-        pref:set("trash_drop_door",     config.trash_drop_door)
-
-        pref:set("enable_anti_player",  config.enable_anti_player)
-        pref:set("anti_player_cd",      config.anti_player_cd)
-        pref:set("enable_fly",          config.enable_fly)
-        pref:set("show_punch",          config.show_punch)
-        pref:set("work_min",            config.work_min)
-        pref:set("rest_min",            config.rest_min)
-        pref:set("enable_jitter",       config.enable_jitter)
-        pref:set("delay_place",         config.delay_place)
-        pref:set("delay_punch",         config.delay_punch)
-        pref:set("delay_harvest",       config.delay_harvest)
-        pref:set("delay_plant",         config.delay_plant)
-        pref:set("enable_safe_delay",   config.enable_safe_delay)
-        pref:set("enable_smart_delay",  config.enable_smart_delay)
-        pref:set("enable_anti_miss",    config.enable_anti_miss)
-        pref:save()
-
-        growtopia.notify("Fix Loop World & Config Saved!")
+        for k, v in pairs(config) do if type(v) ~= "table" then pref:set(k, v) end end
+        pref:save(); updateActiveTrashList(); growtopia.notify("Config Saved!")[cite: 8]
 
     elseif name == "btn_start" then
         if value == true then
-            if config.block_id == 0 then
-                growtopia.notify("Isi Block ID dulu!")
-                editValue("btn_start", false)
-                return
+            if config.block_id == 0 or (config.pnb_x == 0 and config.pnb_y == 0) then
+                growtopia.notify("Isi Block ID dan PnB X/Y dulu!")
+                editValue("btn_start", false); return
             end
-            if config.pnb_x == 0 and config.pnb_y == 0 then
-                growtopia.notify("Set posisi PnB dulu!")
-                editValue("btn_start", false)
-                return
-            end
-
             thread_instance = thread_instance + 1
-            local current_id = thread_instance
-
-            running          = false
-            Sleep(300)
-            running          = true
-            reconnecting     = false
-            action_count     = 0
-            gc_counter       = 0
-
-            sendVariant({v1 = "OnTextOverlay", v2 = "AUTO ROTASI 24/7 BY LOLISTORE"})
-            Log("AUTO ROTASI 24/7 BY LOLISTORE — Started!")
-
-            runThread(function()
-                mainLoop(current_id)
-            end)
+            running, reconnecting = true, false
+            sendVariant({v1 = "OnTextOverlay", v2 = "AUTO ROTASI TURBO"})
+            runThread(function() mainLoop(thread_instance) end)
         else
             thread_instance = thread_instance + 1
             running = false
-            Log("Rotasi dihentikan.")
+            Log("Rotasi Stop.")
         end
     end
 end
 
-addHook(onConsoleMessage, "onConsoleMessage")
-addHook(onVariant, "onVariant")
-addHook(OnDraw, "onDraw")
-addHook(OnValue, "onValue")
-applyHook()
+addHook(OnDraw, "onDraw"); addHook(OnValue, "onValue"); applyHook()
