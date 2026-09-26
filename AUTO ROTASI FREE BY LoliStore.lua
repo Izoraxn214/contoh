@@ -110,11 +110,15 @@ local function updateActionTime()
     end
 end
 
+-- FIX UNIVERSAL INVENTORY COUNT (Mendukung amount, count, dan cnt)
 local function invCount(item_id)
+    if not item_id or tonumber(item_id) == 0 then return 0 end
     local ok, inv = pcall(getInventory)
     if not ok or type(inv) ~= "table" then return 0 end
     for _, item in pairs(inv) do
-        if item and item.id == item_id then return item.amount end
+        if item and item.id and (tonumber(item.id) == tonumber(item_id)) then
+            return tonumber(item.amount or item.count or item.cnt or 0) or 0
+        end
     end
     return 0
 end
@@ -126,6 +130,7 @@ end
 local function checkPriorityDrop(my_id)
     if not isThreadActive(my_id) then return false end
 
+    -- 1. CEK TRASH ITEMS (PRIORITAS PERTAMA)
     if config.enable_trash_drop then
         for i, item in ipairs(trash_defaults) do
             local is_enabled = config["trash_"..i.."_enable"]
@@ -137,7 +142,7 @@ local function checkPriorityDrop(my_id)
             if is_enabled and t_id > 0 then
                 local current_amt = invCount(t_id)
                 if current_amt >= min_cnt then
-                    Log("`3[TRASH DROP] " .. item.name .. " (ID: " .. t_id .. ") berjumlah " .. current_amt .. " (>= " .. min_cnt .. "). Drop ke X=" .. t_x .. ", Y=" .. t_y .. "`0")
+                    Log("`3[PRIORITY TRASH DROP] " .. item.name .. " (ID: " .. t_id .. ") berjumlah " .. current_amt .. " (>= " .. min_cnt .. "). Langsung Warp Drop!`0")
                     doTrashDrop(my_id, t_id, t_x, t_y)
                     return true
                 end
@@ -145,12 +150,19 @@ local function checkPriorityDrop(my_id)
         end
     end
 
+    -- 2. CEK SEED / BLOCK UTAMA
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
-    if invCount(target_item) >= config.high_trigger then
-        Log("`3[PRIORITY DROP] Item penuh (" .. invCount(target_item) .. "). Langsung drop dulu!`0")
-        doDrop(my_id)
-        return true
+    if target_item == 0 then target_item = config.block_id end
+
+    if target_item > 0 then
+        local current_amt = invCount(target_item)
+        if current_amt >= config.high_trigger then
+            Log("`3[PRIORITY DROP SEED/BLOCK] Item ID " .. target_item .. " penuh (" .. current_amt .. " >= " .. config.high_trigger .. "). Langsung Warp Drop!`0")
+            doDrop(my_id)
+            return true
+        end
     end
+
     return false
 end
 
@@ -361,7 +373,6 @@ local function safeGetObjects()
     return nil
 end
 
--- FIX HARVEST: Mendukung Target ID khusus saat memukul pohon/block
 local function punchTile(tx, ty, target_id)
     if not config.enable_break then return end
     local p = getPlayer()
@@ -449,7 +460,7 @@ local function getReadyHarvestTiles()
     local result = {}
     if not tiles then return result end
     for _, tile in pairs(tiles) do
-        if tile and tile.fg == seed_id and (tile.readyharvest == true or tile.readyharvest == nil) then
+        if tile and tile.fg == seed_id then
             table.insert(result, {x = tile.x, y = tile.y})
         end
     end
@@ -488,7 +499,9 @@ local function doPlant(my_id)
 
     for _, t in ipairs(plant_tiles) do
         if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
-        if checkPriorityDrop(my_id) then end
+        
+        -- Jika priority drop terpicu saat menanam, hentikan loop dan re-evaluasi
+        if checkPriorityDrop(my_id) then return end
         if invCount(seed_id) <= config.low_trigger then break end
 
         local tile = safeGetTile(t.x, t.y)
@@ -522,7 +535,9 @@ local function doHarvestLoop(my_id)
 
     for _, t in ipairs(ready_tiles) do
         if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
-        if checkPriorityDrop(my_id) then end
+        
+        -- Jika priority drop terpicu saat harvest, hentikan loop dan refresh daftar pohon
+        if checkPriorityDrop(my_id) then return end
         if invCount(config.block_id) >= config.high_trigger then break end
 
         local tile = safeGetTile(t.x, t.y)
@@ -532,7 +547,6 @@ local function doHarvestLoop(my_id)
                 local retry = 0
                 while retry < config.pnb_retry do
                     if not isThreadActive(my_id) then return end
-                    -- Memukul pohon dengan membawa parameter seed_id
                     punchTile(t.x, t.y, seed_id)
 
                     if config.enable_anti_miss then
@@ -548,7 +562,7 @@ local function doHarvestLoop(my_id)
                     end
                 end
                 collectNearby()
-                checkPriorityDrop(my_id)
+                if checkPriorityDrop(my_id) then return end
             end
         end
     end
@@ -606,9 +620,17 @@ end
 
 doDrop = function(my_id)
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
-    local total_item  = invCount(target_item)
+    if target_item == 0 then target_item = config.block_id end
+
+    local total_item = invCount(target_item)
+    if total_item <= 0 then return end
+
+    -- Menyisakan low_trigger jika yang di-drop adalah seed (agar masih bisa ditanam)
+    local keep_amount = 0
+    if target_item == seed_id then
+        keep_amount = math.max(0, config.low_trigger or 10)
+    end
     
-    local keep_amount    = math.floor(total_item / 2)
     local amount_to_drop = total_item - keep_amount
 
     if amount_to_drop < config.min_drop_amt then
@@ -674,7 +696,6 @@ doDrop = function(my_id)
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
 end
 
--- LOGIKA PNB SIMPEL KLASIK
 local function getPnbTargets(cx, cy)
     local mode = config.pnb_mode or 1
     if mode == 2 then
@@ -708,6 +729,7 @@ local function doPnb(my_id)
         if not checkAntiPlayer(my_id) then return end
         
         if checkPriorityDrop(my_id) then
+            -- Setelah balik dari storage, kembali ke posisi PnB
             walkTo(config.pnb_x, config.pnb_y)
             Sleep(300)
         end
@@ -1222,7 +1244,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",    config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Harvest Bug Fixed & All Config Tersimpan!")
+        growtopia.notify("Absolute Priority Drop Fixed & All Config Saved!")
 
     elseif name == "btn_start" then
         if value == true then
