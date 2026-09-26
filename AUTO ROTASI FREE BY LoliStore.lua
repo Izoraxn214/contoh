@@ -88,6 +88,8 @@ local thread_instance    = 0
 local session_start_time = 0
 
 local last_action_time   = 0
+local last_priority_check= 0
+local last_collect_time  = 0
 local current_work_sec   = 0
 local current_rest_sec   = 0
 
@@ -110,27 +112,50 @@ local function updateActionTime()
     end
 end
 
--- FIX UNIVERSAL INVENTORY COUNT (Mendukung amount, count, dan cnt)
-local function invCount(item_id)
-    if not item_id or tonumber(item_id) == 0 then return 0 end
+-- OPTIMASI: BACA INVENTORY CUMA 1 KALI (Mencegah Lag CPU)
+local function getInventoryMap()
     local ok, inv = pcall(getInventory)
-    if not ok or type(inv) ~= "table" then return 0 end
+    if not ok or type(inv) ~= "table" then return nil end
+    local map = {}
     for _, item in pairs(inv) do
-        if item and item.id and (tonumber(item.id) == tonumber(item_id)) then
-            return tonumber(item.amount or item.count or item.cnt or 0) or 0
+        if item and item.id then
+            local id  = tonumber(item.id)
+            local amt = tonumber(item.amount or item.count or item.cnt or 0) or 0
+            if id then
+                map[id] = (map[id] or 0) + amt
+            end
         end
     end
-    return 0
+    return map
+end
+
+local function invCount(item_id, invMap)
+    if not item_id or tonumber(item_id) == 0 then return 0 end
+    if invMap then
+        return invMap[tonumber(item_id)] or 0
+    end
+    local map = getInventoryMap()
+    return map and (map[tonumber(item_id)] or 0) or 0
 end
 
 local function isThreadActive(my_id)
     return running and not reconnecting and (thread_instance == my_id)
 end
 
-local function checkPriorityDrop(my_id)
+-- OPTIMASI: PRIORITY DROP DENGAN THROTTLING & SINGLE-CALL INVENTORY SCAN
+local function checkPriorityDrop(my_id, force)
     if not isThreadActive(my_id) then return false end
 
-    -- 1. CEK TRASH ITEMS (PRIORITAS PERTAMA)
+    local now = os.time()
+    if not force and (now - last_priority_check < 1) then
+        return false
+    end
+    last_priority_check = now
+
+    local invMap = getInventoryMap()
+    if not invMap then return false end
+
+    -- 1. CEK TRASH ITEMS
     if config.enable_trash_drop then
         for i, item in ipairs(trash_defaults) do
             local is_enabled = config["trash_"..i.."_enable"]
@@ -140,9 +165,9 @@ local function checkPriorityDrop(my_id)
             local t_y        = config["trash_"..i.."_y"] or 0
 
             if is_enabled and t_id > 0 then
-                local current_amt = invCount(t_id)
+                local current_amt = invMap[t_id] or 0
                 if current_amt >= min_cnt then
-                    Log("`3[PRIORITY TRASH DROP] " .. item.name .. " (ID: " .. t_id .. ") berjumlah " .. current_amt .. " (>= " .. min_cnt .. "). Langsung Warp Drop!`0")
+                    Log("`3[PRIORITY TRASH DROP] " .. item.name .. " (ID: " .. t_id .. ") berjumlah " .. current_amt .. " (>= " .. min_cnt .. "). Drop!`0")
                     doTrashDrop(my_id, t_id, t_x, t_y)
                     return true
                 end
@@ -155,9 +180,9 @@ local function checkPriorityDrop(my_id)
     if target_item == 0 then target_item = config.block_id end
 
     if target_item > 0 then
-        local current_amt = invCount(target_item)
+        local current_amt = invMap[target_item] or 0
         if current_amt >= config.high_trigger then
-            Log("`3[PRIORITY DROP SEED/BLOCK] Item ID " .. target_item .. " penuh (" .. current_amt .. " >= " .. config.high_trigger .. "). Langsung Warp Drop!`0")
+            Log("`3[PRIORITY DROP SEED/BLOCK] Item ID " .. target_item .. " penuh (" .. current_amt .. " >= " .. config.high_trigger .. "). Drop!`0")
             doDrop(my_id)
             return true
         end
@@ -432,7 +457,12 @@ local function walkTo(tx, ty)
     return false
 end
 
+-- OPTIMASI: THROTTLE COLLECT NEARBY (Ringan di FPS)
 local function collectNearby(radius_px)
+    local now = os.time()
+    if (now - last_collect_time) < 1 then return end
+    last_collect_time = now
+
     radius_px = radius_px or 96
     local p = getPlayer()
     if not p then return end
@@ -500,7 +530,6 @@ local function doPlant(my_id)
     for _, t in ipairs(plant_tiles) do
         if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
         
-        -- Jika priority drop terpicu saat menanam, hentikan loop dan re-evaluasi
         if checkPriorityDrop(my_id) then return end
         if invCount(seed_id) <= config.low_trigger then break end
 
@@ -536,7 +565,6 @@ local function doHarvestLoop(my_id)
     for _, t in ipairs(ready_tiles) do
         if not isThreadActive(my_id) or not checkAntiPlayer(my_id) then return end
         
-        -- Jika priority drop terpicu saat harvest, hentikan loop dan refresh daftar pohon
         if checkPriorityDrop(my_id) then return end
         if invCount(config.block_id) >= config.high_trigger then break end
 
@@ -625,7 +653,6 @@ doDrop = function(my_id)
     local total_item = invCount(target_item)
     if total_item <= 0 then return end
 
-    -- Menyisakan low_trigger jika yang di-drop adalah seed (agar masih bisa ditanam)
     local keep_amount = 0
     if target_item == seed_id then
         keep_amount = math.max(0, config.low_trigger or 10)
@@ -729,7 +756,6 @@ local function doPnb(my_id)
         if not checkAntiPlayer(my_id) then return end
         
         if checkPriorityDrop(my_id) then
-            -- Setelah balik dari storage, kembali ke posisi PnB
             walkTo(config.pnb_x, config.pnb_y)
             Sleep(300)
         end
@@ -1244,7 +1270,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",    config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Absolute Priority Drop Fixed & All Config Saved!")
+        growtopia.notify("Lag Fixed & Config Saved!")
 
     elseif name == "btn_start" then
         if value == true then
