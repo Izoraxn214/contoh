@@ -18,10 +18,11 @@ local trash_defaults = {
 }
 
 local config = {
+    -- MAIN CONFIG
     block_id             = pref:get("block_id",             0),
-    search_name          = pref:get("search_name",          ""),
+    seed_id              = pref:get("seed_id",              0),
     
-    -- DIGABUNG: AUTOFARM & PNB SETTINGS
+    -- AUTOFARM & PNB SETTINGS
     enable_verify_punch  = pref:get("enable_verify_punch",  true),
     enable_break         = pref:get("enable_break",         true),
     enable_place         = pref:get("enable_place",         true),
@@ -30,7 +31,6 @@ local config = {
     pnb_x                = pref:get("pnb_x",                0),
     pnb_y                = pref:get("pnb_y",                0),
     pnb_mode             = pref:get("pnb_mode",             1),
-    custom_tile_offsets  = pref:get("custom_tile_offsets",  "0,-1 | -1,-1 | 1,-1"),
     
     -- DROP SEED/BLOCK UTAMA
     high_trigger         = pref:get("high_trigger",          180),
@@ -361,14 +361,16 @@ local function safeGetObjects()
     return nil
 end
 
-local function punchTile(tx, ty)
+-- FIX HARVEST: Mendukung Target ID khusus saat memukul pohon/block
+local function punchTile(tx, ty, target_id)
     if not config.enable_break then return end
     local p = getPlayer()
     if not p then return end
 
     if config.enable_verify_punch then
         local tile = safeGetTile(tx, ty)
-        if not tile or (config.block_id > 0 and tile.fg ~= config.block_id) then
+        local expected = target_id or config.block_id
+        if not tile or (expected > 0 and tile.fg ~= expected) then
             return
         end
     end
@@ -447,7 +449,7 @@ local function getReadyHarvestTiles()
     local result = {}
     if not tiles then return result end
     for _, tile in pairs(tiles) do
-        if tile and tile.fg == seed_id and tile.readyharvest == true then
+        if tile and tile.fg == seed_id and (tile.readyharvest == true or tile.readyharvest == nil) then
             table.insert(result, {x = tile.x, y = tile.y})
         end
     end
@@ -524,13 +526,14 @@ local function doHarvestLoop(my_id)
         if invCount(config.block_id) >= config.high_trigger then break end
 
         local tile = safeGetTile(t.x, t.y)
-        if tile and tile.fg == seed_id and tile.readyharvest == true then
+        if tile and tile.fg == seed_id then
             local reached = walkTo(t.x, t.y)
             if reached then
                 local retry = 0
                 while retry < config.pnb_retry do
                     if not isThreadActive(my_id) then return end
-                    punchTile(t.x, t.y)
+                    -- Memukul pohon dengan membawa parameter seed_id
+                    punchTile(t.x, t.y, seed_id)
 
                     if config.enable_anti_miss then
                         local check_tile = safeGetTile(t.x, t.y)
@@ -551,7 +554,6 @@ local function doHarvestLoop(my_id)
     end
 end
 
--- EKSEKUSI TRASH DROP DENGAN FITUR MUNDUR JIKA UBIN PENUH
 doTrashDrop = function(my_id, item_id, drop_x, drop_y)
     local count = invCount(item_id)
     if count <= 0 then return end
@@ -602,7 +604,6 @@ doTrashDrop = function(my_id, item_id, drop_x, drop_y)
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
 end
 
--- EKSEKUSI DROP UTAMA SEED/BLOCK DENGAN FITUR MUNDUR JIKA PENUH
 doDrop = function(my_id)
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
     local total_item  = invCount(target_item)
@@ -673,7 +674,7 @@ doDrop = function(my_id)
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
 end
 
--- LOGIKA SELECT TILE PATTERN
+-- LOGIKA PNB SIMPEL KLASIK
 local function getPnbTargets(cx, cy)
     local mode = config.pnb_mode or 1
     if mode == 2 then
@@ -686,29 +687,6 @@ local function getPnbTargets(cx, cy)
         return {
             {x = cx, y = cy + 1},
             {x = cx, y = cy + 2},
-        }
-    elseif mode == 4 then
-        return {
-            {x = cx - 1, y = cy},
-            {x = cx + 1, y = cy},
-        }
-    elseif mode == 5 then
-        local result = {}
-        local raw_str = config.custom_tile_offsets or ""
-        for offset_pair in string.gmatch(raw_str, "([^|]+)") do
-            local dx_str, dy_str = string.match(offset_pair, "(%-?%d+)%s*,%s*(%-?%d+)")
-            local dx, dy = tonumber(dx_str), tonumber(dy_str)
-            if dx and dy then
-                table.insert(result, {x = cx + dx, y = cy + dy})
-            end
-        end
-        if #result > 0 then return result end
-        return {
-            {x = cx - 2, y = cy - 1},
-            {x = cx - 1, y = cy - 1},
-            {x = cx,     y = cy - 1},
-            {x = cx + 1, y = cy - 1},
-            {x = cx + 2, y = cy - 1},
         }
     else
         return {
@@ -766,7 +744,7 @@ local function doPnb(my_id)
                     local cur = safeGetTile(t.x, t.y)
                     if cur and cur.fg ~= 0 then
                         all_broken = false
-                        punchTile(t.x, t.y)
+                        punchTile(t.x, t.y, config.block_id)
                     end
                 end
                 if all_broken then break end
@@ -866,7 +844,7 @@ end
 local function mainLoop(my_id)
     math.randomseed(os.time())
 
-    seed_id            = config.block_id + 1
+    seed_id            = (config.seed_id and config.seed_id > 0) and config.seed_id or (config.block_id + 1)
     reconnecting       = false
     action_count       = 0
     gc_counter         = 0
@@ -883,7 +861,7 @@ local function mainLoop(my_id)
         if cw then table.insert(farm_world_list, cw) end
     end
 
-    Log("ROTASI 24/7 MULAI! Total Farm World: " .. #farm_world_list)
+    Log("ROTASI 24/7 MULAI! Total Farm World: " .. #farm_world_list .. " | Block ID: " .. config.block_id .. " | Seed ID: " .. seed_id)
 
     runThread(function() reconnectMonitor(my_id) end)
 
@@ -916,10 +894,8 @@ ui:addLabelApp("AUTO ROTASI 24/7 BY LOLISTORE", "Ability")
 ui:addDivider()
 
 local dialog_main = ui:addDialog("Main Config", "Setting utama rotasi", {})
-ui:addChildInputString(dialog_main.menu, "Search Item Name", config.search_name, "Nama", "Contoh: pepper / chand", "Search", "search_name")
-ui:addChildButton(dialog_main.menu,      "🔍 Search Item in Inventory", "btn_search_item")
-ui:addChildButton(dialog_main.menu,      "✋ Pick Item in Hand",        "btn_pick_hand")
-ui:addChildInputInt(dialog_main.menu,    "Block ID (Auto)",  config.block_id,     "ID",    "ID block (terisi otomatis)",         "Verified", "block_id")
+ui:addChildInputInt(dialog_main.menu,    "Block ID",         config.block_id,     "ID",    "ID block yang di-farm",              "Verified", "block_id")
+ui:addChildInputInt(dialog_main.menu,    "Seed ID",          config.seed_id,      "ID",    "ID seed (0 = otomatis Block ID + 1)","Verified", "seed_id")
 ui:addChildInputString(dialog_main.menu, "Farm World",       config.farm_world,   "World", "FARM1,FARM2 (pisahkan koma)",        "World",    "farm_world")
 ui:addChildInputString(dialog_main.menu, "Farm Door",        config.farm_door,    "ID",    "ID door universal world farm",       "World",    "farm_door")
 ui:addChildInputInt(dialog_main.menu,    "High Trigger",     config.high_trigger, "amt",   "item>=ini->Drop (def:180)",          "Verified", "high_trigger")
@@ -927,18 +903,15 @@ ui:addChildInputInt(dialog_main.menu,    "Low Trigger",      config.low_trigger,
 
 ui:addDivider()
 
-local dialog_autofarm = ui:addDialog("Autofarm & PnB Settings", "Pengaturan aksi Break, Place, PnB & Pola Ubin", {})
+local dialog_autofarm = ui:addDialog("Autofarm & PnB Settings", "Pengaturan aksi Break, Place & PnB", {})
 ui:addChildToggle(dialog_autofarm.menu,   "Verify before punch", config.enable_verify_punch, "enable_verify_punch")
 ui:addChildToggle(dialog_autofarm.menu,   "Break",               config.enable_break,        "enable_break")
 ui:addChildToggle(dialog_autofarm.menu,   "Place",               config.enable_place,        "enable_place")
 ui:addChildInputInt(dialog_autofarm.menu, "Hit Count",           config.hit_count,           "cnt", "Pukulan per siklus (def:1)", "Verified", "hit_count")
-
 ui:addChildInputInt(dialog_autofarm.menu, "PnB X",               config.pnb_x,                "X", "Koordinat PnB X", "Verified", "pnb_x")
 ui:addChildInputInt(dialog_autofarm.menu, "PnB Y",               config.pnb_y,                "Y", "Koordinat PnB Y", "Verified", "pnb_y")
 ui:addChildButton(dialog_autofarm.menu,   "Set PnB Posisi Sekarang", "btn_pnb_set")
-
-ui:addChildInputInt(dialog_autofarm.menu, "Select Tile Pattern", config.pnb_mode,            "Mode", "1: 5-Tile Top | 2: 3-Tile Top | 3: 2-Tile Bottom | 4: Left-Right | 5: Custom", "Verified", "pnb_mode")
-ui:addChildInputString(dialog_autofarm.menu, "Custom Tile Offsets", config.custom_tile_offsets, "Offsets", "Misal: 0,-1 | -1,-1 | 1,-1 (jika Mode=5)", "Verified", "custom_tile_offsets")
+ui:addChildInputInt(dialog_autofarm.menu, "PnB Pattern Mode",    config.pnb_mode,            "Mode", "1: 5-Tile Top | 2: 3-Tile Top | 3: 2-Tile Bottom", "Verified", "pnb_mode")
 
 ui:addDivider()
 
@@ -998,7 +971,7 @@ ui:addToggleButton("Start / Stop", false, "btn_start")
 
 local temp = {
     block_id             = tostring(config.block_id),
-    search_name          = config.search_name,
+    seed_id              = tostring(config.seed_id),
     high_trigger         = tostring(config.high_trigger),
     low_trigger          = tostring(config.low_trigger),
     farm_world           = config.farm_world,
@@ -1010,7 +983,6 @@ local temp = {
     pnb_x                = tostring(config.pnb_x),
     pnb_y                = tostring(config.pnb_y),
     pnb_mode             = tostring(config.pnb_mode),
-    custom_tile_offsets  = config.custom_tile_offsets,
     enable_verify_punch  = config.enable_verify_punch,
     enable_break         = config.enable_break,
     enable_place         = config.enable_place,
@@ -1057,7 +1029,7 @@ end
 
 function OnValue(type, name, value)
     if     name == "block_id"            then temp.block_id            = tostring(value)
-    elseif name == "search_name"         then temp.search_name         = value
+    elseif name == "seed_id"             then temp.seed_id             = tostring(value)
     elseif name == "high_trigger"        then temp.high_trigger        = tostring(value)
     elseif name == "low_trigger"         then temp.low_trigger         = tostring(value)
     elseif name == "farm_world"          then temp.farm_world          = value
@@ -1069,7 +1041,6 @@ function OnValue(type, name, value)
     elseif name == "pnb_x"               then temp.pnb_x               = tostring(value)
     elseif name == "pnb_y"               then temp.pnb_y               = tostring(value)
     elseif name == "pnb_mode"            then temp.pnb_mode            = tostring(value)
-    elseif name == "custom_tile_offsets" then temp.custom_tile_offsets = value
     elseif name == "enable_verify_punch" then temp.enable_verify_punch = value
     elseif name == "enable_break"        then temp.enable_break        = value
     elseif name == "enable_place"        then temp.enable_place        = value
@@ -1125,58 +1096,7 @@ function OnValue(type, name, value)
         end
     end
 
-    if name == "btn_search_item" then
-        local query = string.lower(temp.search_name or "")
-        if query == "" then
-            growtopia.notify("Ketik nama item dulu di kolom Search!")
-            return
-        end
-
-        local ok, inv = pcall(getInventory)
-        if ok and type(inv) == "table" then
-            for _, item in pairs(inv) do
-                local info = (getItemInfo and pcall(getItemInfo, item.id)) and getItemInfo(item.id) or nil
-                local item_name = info and string.lower(info.name or "") or ""
-                
-                if string.find(item_name, query) then
-                    config.block_id = item.id
-                    seed_id         = item.id + 1
-                    temp.block_id   = tostring(item.id)
-                    
-                    pref:set("block_id", config.block_id)
-                    pref:save()
-                    editValue("block_id", config.block_id)
-                    
-                    growtopia.notify("Ketemu! " .. (info.name or "Item") .. " (ID: " .. item.id .. ")")
-                    Log("Search berhasil! Block ID set ke: " .. item.id .. ", Seed ID: " .. seed_id)
-                    return
-                end
-            end
-        end
-        growtopia.notify("Item '" .. query .. "' tidak ditemukan di Inventory!")
-
-    elseif name == "btn_pick_hand" then
-        local ok, inv = pcall(getInventory)
-        if ok and type(inv) == "table" then
-            for _, item in pairs(inv) do
-                if item and (item.active or item.is_selected) then
-                    config.block_id = item.id
-                    seed_id         = item.id + 1
-                    temp.block_id   = tostring(item.id)
-                    
-                    pref:set("block_id", config.block_id)
-                    pref:save()
-                    editValue("block_id", config.block_id)
-                    
-                    growtopia.notify("Block ID di-set dari tangan: " .. item.id)
-                    Log("Pick Hand Berhasil! Block ID: " .. item.id .. ", Seed ID: " .. seed_id)
-                    return
-                end
-            end
-        end
-        growtopia.notify("Pegang / pilih block di inventory dulu!")
-
-    elseif name == "btn_pnb_set" then
+    if name == "btn_pnb_set" then
         local p = getPlayer()
         if p then
             local cx = math.floor(p.posX / 32)
@@ -1206,7 +1126,7 @@ function OnValue(type, name, value)
 
     elseif name == "btn_apply" then
         config.block_id           = tonumber(temp.block_id)            or config.block_id
-        config.search_name        = temp.search_name
+        config.seed_id            = tonumber(temp.seed_id)             or config.seed_id
         config.high_trigger       = tonumber(temp.high_trigger)        or config.high_trigger
         config.low_trigger        = tonumber(temp.low_trigger)         or config.low_trigger
         config.farm_world         = temp.farm_world
@@ -1218,7 +1138,6 @@ function OnValue(type, name, value)
         config.pnb_x              = tonumber(temp.pnb_x)               or config.pnb_x
         config.pnb_y              = tonumber(temp.pnb_y)               or config.pnb_y
         config.pnb_mode           = tonumber(temp.pnb_mode)            or config.pnb_mode
-        config.custom_tile_offsets= temp.custom_tile_offsets
         config.enable_verify_punch= temp.enable_verify_punch
         config.enable_break       = temp.enable_break
         config.enable_place       = temp.enable_place
@@ -1260,10 +1179,10 @@ function OnValue(type, name, value)
         config.enable_smart_delay = temp.enable_smart_delay
         config.enable_anti_miss   = temp.enable_anti_miss
 
-        seed_id = config.block_id + 1
+        seed_id = (config.seed_id and config.seed_id > 0) and config.seed_id or (config.block_id + 1)
 
         pref:set("block_id",            config.block_id)
-        pref:set("search_name",         config.search_name)
+        pref:set("seed_id",             config.seed_id)
         pref:set("high_trigger",        config.high_trigger)
         pref:set("low_trigger",         config.low_trigger)
         pref:set("farm_world",          config.farm_world)
@@ -1275,7 +1194,6 @@ function OnValue(type, name, value)
         pref:set("pnb_x",               config.pnb_x)
         pref:set("pnb_y",               config.pnb_y)
         pref:set("pnb_mode",            config.pnb_mode)
-        pref:set("custom_tile_offsets", config.custom_tile_offsets)
         pref:set("enable_verify_punch", config.enable_verify_punch)
         pref:set("enable_break",        config.enable_break)
         pref:set("enable_place",        config.enable_place)
@@ -1304,7 +1222,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",    config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("All Settings & Config Tersimpan!")
+        growtopia.notify("Harvest Bug Fixed & All Config Tersimpan!")
 
     elseif name == "btn_start" then
         if value == true then
