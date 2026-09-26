@@ -112,7 +112,7 @@ local function updateActionTime()
     end
 end
 
--- INVENTORY SCANNER CACHED (Sangat Ringan CPU)
+-- INVENTORY SCANNER CACHED
 local function getInventoryMap()
     local ok, inv = pcall(getInventory)
     if not ok or type(inv) ~= "table" then return nil end
@@ -142,7 +142,7 @@ local function isThreadActive(my_id)
     return running and not reconnecting and (thread_instance == my_id)
 end
 
--- PRIORITY DROP CHECKER (Di-throttle Maksimal 1 Detik)
+-- PRIORITY DROP CHECKER
 local function checkPriorityDrop(my_id, force)
     if not isThreadActive(my_id) then return false end
 
@@ -150,7 +150,6 @@ local function checkPriorityDrop(my_id, force)
     if not force and (now - last_priority_check < 1) then
         return false
     end
-    last_priority_check = now
 
     local invMap = getInventoryMap()
     if not invMap then return false end
@@ -167,9 +166,9 @@ local function checkPriorityDrop(my_id, force)
             if is_enabled and t_id > 0 then
                 local current_amt = invMap[t_id] or 0
                 if current_amt >= min_cnt then
+                    last_priority_check = now
                     Log("`3[PRIORITY TRASH DROP] " .. item.name .. " (ID: " .. t_id .. ") berjumlah " .. current_amt .. " (>= " .. min_cnt .. "). Langsung Warp Drop!`0")
-                    doTrashDrop(my_id, t_id, t_x, t_y)
-                    return true
+                    return doTrashDrop(my_id, t_id, t_x, t_y)
                 end
             end
         end
@@ -182,9 +181,9 @@ local function checkPriorityDrop(my_id, force)
     if target_item > 0 then
         local current_amt = invMap[target_item] or 0
         if current_amt >= config.high_trigger then
+            last_priority_check = now
             Log("`3[PRIORITY DROP SEED/BLOCK] Item ID " .. target_item .. " penuh (" .. current_amt .. " >= " .. config.high_trigger .. "). Langsung Warp Drop!`0")
-            doDrop(my_id)
-            return true
+            return doDrop(my_id)
         end
     end
 
@@ -484,7 +483,6 @@ local function collectNearby(radius_px)
     end
 end
 
--- MENCARI POHON MATANG DENGAN VALIDASI KETAT
 local function getReadyHarvestTiles()
     local tiles  = safeGetTiles()
     local result = {}
@@ -503,7 +501,6 @@ local function getReadyHarvestTiles()
     return result
 end
 
--- MENCARI LAHAN KOSONG UNTUK DITANAM
 local function getPlantableTiles()
     local tiles  = safeGetTiles()
     local result = {}
@@ -601,17 +598,17 @@ end
 
 doTrashDrop = function(my_id, item_id, drop_x, drop_y)
     local count = invCount(item_id)
-    if count <= 0 then return end
+    if count <= 0 then return false end
 
     local target_trash_world = (config.trash_drop_world and config.trash_drop_world ~= "") and config.trash_drop_world or getCurrentFarmWorld()
     local ok_warp = warpToWorld(target_trash_world, config.trash_drop_door, my_id, true)
     
     if not ok_warp then
         Log("Gagal warp ke Trash Storage World!")
-        return
+        return false
     end
 
-    if not isThreadActive(my_id) then return end
+    if not isThreadActive(my_id) then return false end
 
     local try_x = drop_x
     local try_y = drop_y
@@ -647,14 +644,16 @@ doTrashDrop = function(my_id, item_id, drop_x, drop_y)
     end
 
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
+    return dropped
 end
 
+-- FIX UTAMA LOGIKA DROP SEED/BLOCK
 doDrop = function(my_id)
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
     if target_item == 0 then target_item = config.block_id end
 
     local total_item = invCount(target_item)
-    if total_item <= 0 then return end
+    if total_item <= 0 then return false end
 
     local keep_amount = 0
     if target_item == seed_id then
@@ -663,9 +662,15 @@ doDrop = function(my_id)
     
     local amount_to_drop = total_item - keep_amount
 
-    if amount_to_drop < config.min_drop_amt then
+    if amount_to_drop <= 0 then
+        Log("Tidak ada sisa item untuk di-drop (Menyisakan " .. keep_amount .. " cadangan).")
+        return false
+    end
+
+    -- FIX: Jika dipicu oleh High Trigger, pembatasan Minimal Drop Amt dibypass agar tidak membatalkan warp
+    if amount_to_drop < config.min_drop_amt and total_item < config.high_trigger then
         Log("Jumlah item yang akan di-drop (" .. amount_to_drop .. ") kurang dari minimal (" .. config.min_drop_amt .. "). Batal warp storage.")
-        return
+        return false
     end
 
     if amount_to_drop > 200 then
@@ -677,10 +682,10 @@ doDrop = function(my_id)
     local ok_drop_warp = warpToWorld(target_drop_world, config.drop_door, my_id, true)
     if not ok_drop_warp then
         Log("Gagal warp ke Storage World! Batal drop item demi keamanan.")
-        return
+        return false
     end
 
-    if not isThreadActive(my_id) then return end
+    if not isThreadActive(my_id) then return false end
 
     local try_x = config.drop_x
     local try_y = config.drop_y
@@ -724,6 +729,7 @@ doDrop = function(my_id)
     end
 
     warpToWorld(getCurrentFarmWorld(), config.farm_door, my_id, true)
+    return dropped
 end
 
 local function getPnbTargets(cx, cy)
@@ -807,7 +813,6 @@ local function doPnb(my_id)
     end
 end
 
--- LOGIKA LINIER KLASIK AMAN (Panen -> PnB -> Tanam -> PnB -> Selesai)
 local function processCurrentWorld(my_id)
     if not isThreadActive(my_id) then return false end
     applyModFly()
@@ -1270,7 +1275,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",    config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Update Berhasil & Config Saved!")
+        growtopia.notify("Fix Drop Batal & Config Saved!")
 
     elseif name == "btn_start" then
         if value == true then
