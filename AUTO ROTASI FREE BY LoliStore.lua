@@ -647,7 +647,6 @@ doTrashDrop = function(my_id, item_id, drop_x, drop_y)
     return dropped
 end
 
--- FIX UTAMA LOGIKA DROP SEED/BLOCK
 doDrop = function(my_id)
     local target_item = (config.drop_item_id > 0) and config.drop_item_id or seed_id
     if target_item == 0 then target_item = config.block_id end
@@ -667,7 +666,6 @@ doDrop = function(my_id)
         return false
     end
 
-    -- FIX: Jika dipicu oleh High Trigger, pembatasan Minimal Drop Amt dibypass agar tidak membatalkan warp
     if amount_to_drop < config.min_drop_amt and total_item < config.high_trigger then
         Log("Jumlah item yang akan di-drop (" .. amount_to_drop .. ") kurang dari minimal (" .. config.min_drop_amt .. "). Batal warp storage.")
         return false
@@ -813,39 +811,64 @@ local function doPnb(my_id)
     end
 end
 
+-- FIX UTAMA: WHILE LOOP AGAR PROSES 1 WORLD SAMPAI SELESAI TOTAL DULU
 local function processCurrentWorld(my_id)
-    if not isThreadActive(my_id) then return false end
-    applyModFly()
-    checkWatchdog(my_id)
+    while isThreadActive(my_id) do
+        if not checkAntiPlayer(my_id) then return false end
+        applyModFly()
+        checkWatchdog(my_id)
 
-    -- 1. PANEN SEMUA POHON YANG SUDAH ADA
-    Log("Step 1: Panen (Harvest)...")
-    doHarvestLoop(my_id)
-    if not isThreadActive(my_id) then return false end
+        checkPriorityDrop(my_id)
 
-    -- 2. PNB JIKA BLOCK PENUH HASIL PANEN
-    if invCount(config.block_id) >= config.high_trigger then
-        Log("Step 2: PnB Block...")
-        doPnb(my_id)
-        if not isThreadActive(my_id) then return false end
+        local ready_tiles    = getReadyHarvestTiles()
+        local plant_tiles    = getPlantableTiles()
+        local current_blocks = invCount(config.block_id)
+        local current_seeds  = invCount(seed_id)
+
+        -- SYARAT BERSIH TOTAL BARU PINDAH WORLD:
+        -- 1. Pohon matang = 0
+        -- 2. Lahan kosong = 0 (atau Seed di tas < Low Trigger)
+        -- 3. Block di tas <= Low Trigger
+        if #ready_tiles == 0 and (#plant_tiles == 0 or current_seeds < config.low_trigger) and current_blocks <= config.low_trigger then
+            Log("`2[FINISH WORLD] World ini sudah bersih total! Pindah ke World Farm berikutnya...`0")
+            return true
+        end
+
+        -- Step A: Panen pohon jika ada
+        if #ready_tiles > 0 and current_blocks < config.high_trigger then
+            Log("Panen Pohon...")
+            doHarvestLoop(my_id)
+            if not isThreadActive(my_id) then return false end
+        end
+
+        -- Step B: PnB block jika penuh/banyak
+        current_blocks = invCount(config.block_id)
+        if current_blocks >= config.high_trigger then
+            Log("PnB Block...")
+            doPnb(my_id)
+            if not isThreadActive(my_id) then return false end
+        end
+
+        -- Step C: Tanam seed ke lahan kosong
+        plant_tiles   = getPlantableTiles()
+        current_seeds = invCount(seed_id)
+        if #plant_tiles > 0 and current_seeds >= config.low_trigger then
+            Log("Tanam Seed...")
+            doPlant(my_id)
+            if not isThreadActive(my_id) then return false end
+        end
+
+        -- Step D: PnB sisa block yang terkumpul
+        current_blocks = invCount(config.block_id)
+        if current_blocks > config.low_trigger then
+            Log("PnB Sisa Block...")
+            doPnb(my_id)
+            if not isThreadActive(my_id) then return false end
+        end
+
+        Sleep(300)
     end
-
-    -- 3. TANAM SEMUA SEED YANG ADA KE LAHAN KOSONG
-    if invCount(seed_id) >= config.low_trigger then
-        Log("Step 3: Tanam Seed...")
-        doPlant(my_id)
-        if not isThreadActive(my_id) then return false end
-    end
-
-    -- 4. PNB SISA BLOCK JIKA MASIH TERKUMPUL
-    if invCount(config.block_id) > config.low_trigger then
-        Log("Step 4: PnB Sisa Block...")
-        doPnb(my_id)
-        if not isThreadActive(my_id) then return false end
-    end
-
-    Log("World ini sudah selesai diproses secara bersih. Rotasi!")
-    return true
+    return false
 end
 
 local function reconnectMonitor(my_id)
@@ -1275,7 +1298,7 @@ function OnValue(type, name, value)
         pref:set("enable_anti_miss",    config.enable_anti_miss)
         pref:save()
 
-        growtopia.notify("Fix Drop Batal & Config Saved!")
+        growtopia.notify("Fix Loop World & Config Saved!")
 
     elseif name == "btn_start" then
         if value == true then
