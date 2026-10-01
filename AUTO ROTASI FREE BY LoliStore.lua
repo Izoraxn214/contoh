@@ -28,6 +28,11 @@
 -- v27 (lebih ringan di HP): GC bertahap (bukan bersih-bersih penuh yang bikin patah-patah),
 -- nama world di-cache saat scan, Auto Collect melambat kalau sepi, PnB nggak baca tile dobel.
 -- v28: cek hasil place di PnB cuma NUNGGU kalau Anti Miss nyala. Anti Miss mati = nol jeda tambahan.
+-- v29: laporan Discord pakai embed (kotak berwarna, field 3 kolom, footer). Butuh relay.gs versi baru;
+-- relay lama tetap jalan tapi cuma nampilin judul.
+-- v30: panen + tanam dalam SATU rute (pohon siap & tile kosong diurut bareng pola ular),
+-- jadi nggak ada putaran kedua yang jalan bolak-balik ke ujung world.
+-- v31: scan world lebih hemat memori (cuma nyatet tile padat, cek daftar skip cuma kalau ada isinya).
 -- Anti-freeze: tiap putaran loop yang tidak menghasilkan aksi nyata WAJIB jeda (makin lama makin panjang).
 -- Drop prioritas: kerjaan yang terpotong drop/trash disimpan (resume) lalu dilanjutkan setelah drop.
 -- Optimasi: priority check di-throttle (1 dtk), 1x scan world per iterasi,
@@ -94,6 +99,7 @@ local config = {
     webhook_url          = pref:get("webhook_url",          ""),   -- URL relay Apps Script (.../exec)
     webhook_key          = pref:get("webhook_key",          ""),   -- harus sama dengan SECRET di relay.gs
     webhook_interval     = pref:get("webhook_interval",     30),   -- laporan rutin tiap N menit (0 = mati)
+    webhook_hide_name    = pref:get("webhook_hide_name",    false), -- nama player jadi spoiler di Discord
     enable_auto_collect  = pref:get("enable_auto_collect",  true),
     collect_radius       = math.min(2, tonumber(pref:get("collect_radius", 1)) or 1),
     log_compact          = pref:get("log_compact",          true),
@@ -117,7 +123,7 @@ end
 
 -- Log Ringkas: pesan rutin yang sering muncul disembunyikan biar console nggak bengkak.
 -- Error, drop, penyakit, reconnect, webhook, dan statistik tetap tampil.
-local LOG_NOISY = { "[FINISH WORLD]", "Panen & Tanam Ulang", "Tanam Seed (", "PnB Block...", "PnB Sisa Block", "START PNB",
+local LOG_NOISY = { "[FINISH WORLD]", "Panen & Tanam Ulang", "Panen & Tanam (", "Tanam Seed (", "PnB Block...", "PnB Sisa Block", "START PNB",
                     "Warp ke World", "[CEK DROP]", "[RESUME]", "Trash aktif:", "[TRASH DI TAS]" }
 local function Log(msg)
     msg = tostring(msg)
@@ -140,10 +146,15 @@ local wh_stats = newStats()
 wh_stats.started = 0
 local function whClean(s) return (tostring(s or ""):gsub("`.", "")) end
 -- Masukin pesan ke antrean. Dikirim thread webhook, nggak nahan bot.
-local function webhookPush(text)
+-- item = teks event (string) ATAU laporan embed (tabel dari buildReport)
+local function webhookPush(item)
     if not config.webhook_enable then return end
     if #wh_queue >= 30 then table.remove(wh_queue, 1) end   -- jaga memori kalau relay mati lama
-    wh_queue[#wh_queue + 1] = os.date("[%H:%M] ") .. whClean(text)
+    if type(item) == "table" then
+        wh_queue[#wh_queue + 1] = item
+    else
+        wh_queue[#wh_queue + 1] = os.date("`%H:%M` ") .. whClean(item)
+    end
 end
 
 -- CACHE TRASH AKTIF
@@ -909,29 +920,47 @@ local function buildWorldTargets(tiles, start_x)
     local plant = {}
     if not tiles then return ready, plant end
 
-    local tile_map = {}
+    -- Cek daftar skip cuma kalau memang ada tile yang lagi di-skip (biasanya kosong)
+    local any_skip = false
+    local now = os.time()
+    for _, m in pairs(tile_mem) do
+        if m.skip_until and now < m.skip_until then any_skip = true; break end
+    end
+
+    -- Cuma nyatet tile PADAT yang bisa jadi pijakan tanam (bukan semua 6000 tile)
+    local ground = {}
     for _, tile in pairs(tiles) do
-        if tile and tile.x ~= nil and tile.y ~= nil then
-            tile_map[tkey(tile.x, tile.y)] = tile
-            if tile.fg == seed_id and tile.readyharvest == true and not tileSkipped("h", tile.x, tile.y) then
-                ready[#ready + 1] = {x = tile.x, y = tile.y}
+        local x, y, fg = tile.x, tile.y, tile.fg
+        if x ~= nil and y ~= nil then
+            if fg == seed_id then
+                if tile.readyharvest == true and not (any_skip and tileSkipped("h", x, y)) then
+                    ready[#ready + 1] = {x = x, y = y}
+                end
+            elseif fg ~= 0 then
+                ground[tkey(x, y)] = true
             end
         end
     end
 
     for _, tile in pairs(tiles) do
-        if tile and tile.x ~= nil and tile.y ~= nil and tile.fg == 0 then
-            local below = tile_map[tkey(tile.x, tile.y + 1)]
-            if below and below.fg ~= 0 and below.fg ~= seed_id and not tileSkipped("p", tile.x, tile.y) then
-                plant[#plant + 1] = {x = tile.x, y = tile.y}
-            end
+        local x, y = tile.x, tile.y
+        if x ~= nil and y ~= nil and tile.fg == 0 and ground[tkey(x, y + 1)]
+            and not (any_skip and tileSkipped("p", x, y)) then
+            plant[#plant + 1] = {x = x, y = y}
         end
     end
 
     return snakeSort(ready, start_x), snakeSort(plant, start_x)
 end
 
--- SATU scan world -> daftar panen + daftar tanam sekaligus
+-- Gabung pohon siap (h) + tile kosong (p) jadi satu rute pola ular
+local function mergeRoute(ready, plant, start_x)
+    local all = {}
+    for _, t in ipairs(ready) do all[#all + 1] = { x = t.x, y = t.y, kind = "h" } end
+    for _, t in ipairs(plant) do all[#all + 1] = { x = t.x, y = t.y, kind = "p" } end
+    return snakeSort(all, start_x)
+end
+
 local function getWorldTargets()
     tileMemClean()
     local tiles = safeGetTiles()
@@ -1028,38 +1057,52 @@ local function doHarvestReplant(my_id, ready_tiles, start_idx)
             Log("`4Panen dihentikan: 5x gagal jalan berturut-turut.`0")
             return false
         end
-        local tile = safeGetTile(t.x, t.y)
-        local go = tile and tile.fg == seed_id and not tileTouch("h", t.x, t.y)
-        if go and not walkTo(t.x, t.y) then tileFail("h", t.x, t.y); go = false end  -- nggak kecapai = gagal juga
-        if go then
-            local retry = 0
-            local broken = false
-            while retry < config.pnb_retry do
-                if not isThreadActive(my_id) then return false end
-                punchTile(t.x, t.y, seed_id)
-                -- tile ini masih dicek ulang saat dilanjutkan (fg==seed -> pukul lagi, fg==0 -> lewati)
-                if checkPriorityDrop(my_id) then return true, idx end
-
-                if config.enable_anti_miss then
-                    if waitTile(t.x, t.y, 0) then broken = true; break end
-                    retry = retry + 1
-                else
-                    broken = true
-                    break
+        if t.kind == "p" then
+            -- tile kosong di rute yang sama: tanam di tempat (kalau seed cukup)
+            if config.enable_place and invCount(seed_id) > config.low_trigger then
+                local tile = safeGetTile(t.x, t.y)
+                local go = tile and tile.fg == 0 and not tileTouch("p", t.x, t.y)
+                if go and not walkTo(t.x, t.y) then tileFail("p", t.x, t.y); go = false end
+                if go then
+                    local r = plantTile(my_id, t.x, t.y)
+                    if r == "drop" then return true, idx + 1 end
+                    if r == "stop" then return false end
                 end
             end
-            if broken then
-                wh_stats.harvested = wh_stats.harvested + 1
-                tile_mem[tileKey("h", t.x, t.y)] = nil
-            elseif config.enable_anti_miss then tileFail("h", t.x, t.y) end
+        else
+            local tile = safeGetTile(t.x, t.y)
+            local go = tile and tile.fg == seed_id and not tileTouch("h", t.x, t.y)
+            if go and not walkTo(t.x, t.y) then tileFail("h", t.x, t.y); go = false end  -- nggak kecapai = gagal juga
+            if go then
+                local retry = 0
+                local broken = false
+                while retry < config.pnb_retry do
+                    if not isThreadActive(my_id) then return false end
+                    punchTile(t.x, t.y, seed_id)
+                    -- tile ini masih dicek ulang saat dilanjutkan (fg==seed -> pukul lagi, fg==0 -> lewati)
+                    if checkPriorityDrop(my_id) then return true, idx end
 
-            collectNearby()
+                    if config.enable_anti_miss then
+                        if waitTile(t.x, t.y, 0) then broken = true; break end
+                        retry = retry + 1
+                    else
+                        broken = true
+                        break
+                    end
+                end
+                if broken then
+                    wh_stats.harvested = wh_stats.harvested + 1
+                    tile_mem[tileKey("h", t.x, t.y)] = nil
+                elseif config.enable_anti_miss then tileFail("h", t.x, t.y) end
 
-            if broken and config.enable_place and invCount(seed_id) > config.low_trigger
-                and not tileTouch("p", t.x, t.y) then
-                local r = plantTile(my_id, t.x, t.y)
-                if r == "drop" then return true, idx + 1 end
-                if r == "stop" then return false end
+                collectNearby()
+
+                if broken and config.enable_place and invCount(seed_id) > config.low_trigger
+                    and not tileTouch("p", t.x, t.y) then
+                    local r = plantTile(my_id, t.x, t.y)
+                    if r == "drop" then return true, idx + 1 end
+                    if r == "stop" then return false end
+                end
             end
         end
     end
@@ -1455,7 +1498,7 @@ local function doPnb(my_id)
             if place_ok > 0 then pnb_pause_count = 0 end
             if place_tries >= 10 and place_ok == 0 then
                 pnb_pause_count = pnb_pause_count + 1
-                local menit = math.min(30, 2 ^ pnb_pause_count)
+                local menit = math.floor(math.min(30, 2 ^ pnb_pause_count))
                 pnb_pause_until = os.time() + menit * 60
                 Log("`4[PNB] Place block gagal terus (" .. place_tries .. "x, nggak ada yang jadi). "
                     .. "Cek akses/lock di titik PnB. PnB dijeda " .. menit .. " menit.`0")
@@ -1559,6 +1602,7 @@ local function processCurrentWorld(my_id)
                     if intr then resume = {phase = 3} end
                 else
                     local ready, plant, phase, idx
+                    local n_ready_log
                     if ctx then
                         -- Lanjutkan kerjaan yang tadi terpotong drop/trash
                         ready, plant = ctx.ready or {}, ctx.plant or {}
@@ -1573,6 +1617,12 @@ local function processCurrentWorld(my_id)
                         if #ready == 0 and #plant == 0 and invCount(config.block_id) <= config.low_trigger then
                             Log("`2[FINISH WORLD] Tidak ada pekerjaan tersisa. Pindah ke World Farm berikutnya...`0")
                             return true
+                        end
+                        -- Fase 1 = satu rute buat panen + tanam. Fase 2 cuma nyapu tile yang masih kosong
+                        -- (mis. seed tadi sempat habis); tile yang udah ketanam dilewati tanpa jalan.
+                        if #plant > 0 then
+                            n_ready_log = #ready
+                            ready = mergeRoute(ready, plant, (getPlayerTile()))
                         end
                         phase, idx = 1, 1
                     end
@@ -1589,7 +1639,7 @@ local function processCurrentWorld(my_id)
                             ready = snakeSort(remainingFrom(ready, idx), (getPlayerTile()))
                             idx = 1
                         end
-                        if not ctx then Log("Panen & Tanam Ulang (" .. #ready .. " pohon)...") end
+                        if not ctx then Log("Panen & Tanam (" .. #ready .. " tile dalam 1 rute)...") end
                         local intr, nxt = doHarvestReplant(my_id, ready, idx)
                         if intr then save(1, nxt) end
                     end
@@ -1724,12 +1774,14 @@ local function urlencode(s)
 end
 
 -- Return: berhasil?, keterangan
-local function webhookSend(text, url, key)
+-- spec = embed dalam format baris (dibaca relay.gs versi baru). text = cadangan buat relay lama.
+local function webhookSend(text, url, key, spec)
     url, key = url or config.webhook_url, key or config.webhook_key
     if type(fetch) ~= "function" then return false, "fetch() nggak ada di Growlauncher versi ini" end
     if not url or url == "" then return false, "Relay URL kosong" end
-    text = tostring(text):sub(1, 900)   -- batas aman panjang URL
+    text = tostring(text):sub(1, spec and 300 or 900)   -- batas aman panjang URL
     local full = url .. (url:find("?", 1, true) and "&" or "?") .. "key=" .. urlencode(key) .. "&msg=" .. urlencode(text)
+    if spec then full = full .. "&e=" .. urlencode(spec:sub(1, 1800)) end
     local ok, res, err = pcall(fetch, full)
     if not ok then return false, tostring(res) end
     if err and err ~= "" then return false, tostring(err) end
@@ -1755,25 +1807,58 @@ local function statLine()
         .. " | Reconnect " .. st.reconnects .. " | Error " .. st.errors .. " | Restart " .. st.restarts
 end
 
-local function buildReport(title)
+local WH_COLOR = { start = 3066993, report = 3447003, stop = 15158332, info = 9807270, warn = 15105570 }
+local WH_FOOTER = "LoliStore Rotasi • Growlauncher"
+local STATUS_TXT = {
+    FARM = "🌾 Farming", PNB = "⛏️ PnB", PRIORITY_DROP = "📦 Drop", ITEM_DROP = "📦 Drop Seed",
+    TRASH_DROP = "🗑️ Buang Trash", RECONNECT = "🔌 Reconnect", IDLE = "⏸️ Berhenti",
+}
+local function fmtNum(n)
+    n = tonumber(n)
+    if not n then return "?" end
+    local neg = n < 0
+    local s = string.format("%d", math.floor(math.abs(n)))
+    s = s:reverse():gsub("(%d%d%d)", "%1."):reverse()
+    if s:sub(1, 1) == "." then s = s:sub(2) end
+    return (neg and "-" or "") .. s
+end
+-- Pemisah dalam field = TAB, jadi "|" (mis. spoiler ||nama||) aman di dalam nilai
+local function specEsc(v) return (tostring(v or "-"):gsub("[\t\r\n]", " ")) end
+local function playerLabel()
     local p = getPlayer()
+    local name = whClean(p and p.name or "?")
+    if config.webhook_hide_name then name = "||" .. name .. "||" end
+    return name
+end
+
+-- Return tabel { report = true, title, spec } -> relay ngubah jadi embed Discord
+local function buildReport(title, color)
     local gems = "?"
     if type(getGems) == "function" then
         local okg, g = pcall(getGems)
-        if okg and tonumber(g) then gems = string.format("%d", math.floor(tonumber(g))) end
+        if okg and tonumber(g) then gems = fmtNum(g) end
     end
-    local lines = {
-        "**" .. title .. "**",
-        "Player: " .. whClean(p and p.name or "?") .. " | World: " .. tostring(safeGetWorldName() or "EXIT"),
-        "Status: " .. tostring(bot_state) .. " | Jalan: " .. fmtDuration(os.time() - wh_stats.started),
-        "Gems: " .. tostring(gems) .. " | Seed: " .. invCount(seed_id) .. " | Block: " .. invCount(config.block_id),
-        "Panen: " .. wh_stats.harvested .. " | Tanam: " .. wh_stats.planted .. " | PnB: " .. wh_stats.pnb_broken .. " block",
-        "Drop seed: " .. wh_stats.seed_trips .. "x (" .. wh_stats.seed_pcs .. " pcs) | Trash: "
-            .. wh_stats.trash_trips .. "x (" .. wh_stats.trash_pcs .. " pcs)",
-        "World selesai: " .. wh_stats.worlds_done .. " | Reconnect: " .. wh_stats.reconnects
-            .. " | Error: " .. wh_stats.errors .. " | Restart: " .. wh_stats.restarts,
-    }
-    return table.concat(lines, "\n")
+    local st = wh_stats
+    local f = {}
+    local function F(label, value) f[#f + 1] = "F|" .. specEsc(label) .. "\t" .. specEsc(value) .. "\t1" end
+    F("👤 Player", playerLabel())
+    F("🌍 World", safeGetWorldName() or "EXIT")
+    F("⚙️ Status", STATUS_TXT[bot_state] or tostring(bot_state))
+    F("⏱️ Jalan", fmtDuration(os.time() - st.started))
+    F("💎 Gems", gems)
+    F("🎒 Tas", "Seed " .. fmtNum(invCount(seed_id)) .. " • Block " .. fmtNum(invCount(config.block_id)))
+    F("🌾 Panen", fmtNum(st.harvested))
+    F("🌱 Tanam", fmtNum(st.planted))
+    F("⛏️ PnB", fmtNum(st.pnb_broken) .. " block")
+    F("📦 Drop Seed", st.seed_trips .. "x • " .. fmtNum(st.seed_pcs) .. " pcs")
+    F("🗑️ Trash", st.trash_trips .. "x • " .. fmtNum(st.trash_pcs) .. " pcs")
+    F("✅ World Selesai", fmtNum(st.worlds_done))
+    F("🔁 Reconnect", fmtNum(st.reconnects))
+    F("⚠️ Error", fmtNum(st.errors))
+    F("♻️ Restart", fmtNum(st.restarts))
+    local spec = "E\nT|" .. specEsc(title) .. "\nC|" .. tostring(color or WH_COLOR.report) .. "\n"
+        .. table.concat(f, "\n") .. "\nO|" .. WH_FOOTER
+    return { report = true, title = title, spec = spec }
 end
 
 -- Thread webhook: kirim antrean (digabung jadi 1 pesan, min jeda 3 dtk) + laporan rutin.
@@ -1798,24 +1883,46 @@ local function webhookLoop(my_id)
             local iv = tonumber(config.webhook_interval) or 0
             if iv > 0 and os.time() - last_report >= iv * 60 then
                 last_report = os.time()
-                wh_queue[#wh_queue + 1] = os.date("[%H:%M] ") .. buildReport("📊 Laporan rutin")
+                wh_queue[#wh_queue + 1] = buildReport("📊 Laporan Rutin", WH_COLOR.report)
             end
         end
 
         if config.webhook_enable and #wh_queue > 0 and nowMs() - last_send >= 3000 then
-            local parts, len = {}, 0
-            while #wh_queue > 0 and len + #wh_queue[1] < 880 do
-                local m = table.remove(wh_queue, 1)
-                parts[#parts + 1] = m
-                len = len + #m + 1
+            -- ambil item dari antrean: maks 3 laporan + event, total spec maks ~1500 huruf
+            local taken, events, specs, len = {}, {}, {}, 0
+            local n_report = 0
+            while #wh_queue > 0 do
+                local it = wh_queue[1]
+                local size = (type(it) == "table") and #it.spec or (#it + 3)
+                if #taken > 0 and (len + size > 1500 or (type(it) == "table" and n_report >= 3)) then break end
+                table.remove(wh_queue, 1)
+                taken[#taken + 1] = it
+                len = len + size
+                if type(it) == "table" then
+                    n_report = n_report + 1
+                    specs[#specs + 1] = it.spec
+                else
+                    events[#events + 1] = it
+                end
             end
-            if #parts == 0 then parts[1] = table.remove(wh_queue, 1) end
-            local ok, info = webhookSend(table.concat(parts, "\n"))
+            local plain = {}
+            for _, it in ipairs(taken) do plain[#plain + 1] = (type(it) == "table") and ("**" .. it.title .. "**") or it end
+            if #events > 0 then
+                local warn = false
+                for _, e in ipairs(events) do
+                    if e:find("⚠️", 1, true) or e:find("🔌", 1, true) then warn = true end
+                end
+                local d = {}
+                for _, e in ipairs(events) do d[#d + 1] = "D|" .. specEsc(e) end
+                specs[#specs + 1] = "E\nT|📝 Aktivitas\nC|" .. (warn and WH_COLOR.warn or WH_COLOR.info) .. "\n"
+                    .. table.concat(d, "\n") .. "\nO|" .. WH_FOOTER
+            end
+            local ok, info = webhookSend(table.concat(plain, "\n"), nil, nil, table.concat(specs, "\n"))
             last_send = nowMs()
             if not ok then
                 Log("`4[WEBHOOK] Gagal kirim: " .. info .. "`0")
-                -- balikin ke depan antrean, coba lagi nanti (jeda lebih lama)
-                for i = #parts, 1, -1 do table.insert(wh_queue, 1, parts[i]) end
+                -- balikin ke depan antrean (urutan asli), coba lagi nanti
+                for k = #taken, 1, -1 do table.insert(wh_queue, 1, taken[k]) end
                 while #wh_queue > 30 do table.remove(wh_queue) end
                 last_send = nowMs() + 27000
             end
@@ -1867,7 +1974,7 @@ local function mainLoop(my_id, is_restart)
         else
             Log("[WEBHOOK] `2Nyala`0 - laporan rutin tiap " .. tostring(config.webhook_interval) .. " menit.")
         end
-        webhookPush(buildReport("🟢 Bot mulai (" .. #farm_world_list .. " farm world)"))
+        webhookPush(buildReport("🟢 Bot Mulai • " .. #farm_world_list .. " farm world", WH_COLOR.start))
     end
     local function guarded(name, fn)
         runThread(function()
@@ -2002,6 +2109,7 @@ local dialog_wh = ui:addDialog("Webhook Discord", "Laporan bot ke Discord lewat 
 ui:addChildToggle(dialog_wh.menu,      "Enable Webhook",          config.webhook_enable,              "webhook_enable")
 ui:addChildInputString(dialog_wh.menu, "Relay URL",               config.webhook_url,                 "URL", "https://script.google.com/macros/s/.../exec", "World", "webhook_url")
 ui:addChildInputString(dialog_wh.menu, "Relay Key",               config.webhook_key,                 "Key", "Sama dengan SECRET di relay.gs",             "World", "webhook_key")
+ui:addChildToggle(dialog_wh.menu,      "Sembunyikan Nama Player", config.webhook_hide_name,         "webhook_hide_name")
 ui:addChildInputInt(dialog_wh.menu,    "Laporan Rutin (menit)",   tostring(config.webhook_interval),  "min", "0 = cuma event penting (def:30)",            "Verified", "webhook_interval")
 ui:addChildButton(dialog_wh.menu,      "Tes Kirim Webhook", "btn_webhook_test")
 
@@ -2044,6 +2152,7 @@ local temp = {
     webhook_url          = config.webhook_url,
     webhook_key          = config.webhook_key,
     webhook_interval     = tostring(config.webhook_interval),
+    webhook_hide_name    = config.webhook_hide_name,
     collect_radius       = tostring(config.collect_radius),
     delay_place          = tostring(config.delay_place),
     delay_punch          = tostring(config.delay_punch),
@@ -2071,7 +2180,7 @@ end
 local TOGGLE_KEYS = {
     enable_verify_punch = true, enable_break = true, enable_place = true, show_punch = true,
     enable_auto_collect = true, enable_trash_drop = true, enable_anti_miss = true, webhook_enable = true,
-    log_compact = true,
+    log_compact = true, webhook_hide_name = true,
 }
 local function asBool(v)
     if v == true or v == 1 or v == "1" or v == "true" then return true end
@@ -2112,14 +2221,21 @@ function OnValue(vtype, name, value)
         config.webhook_url = tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", ""); temp.webhook_url = config.webhook_url
     elseif name == "webhook_key" then
         config.webhook_key = tostring(value or ""); temp.webhook_key = config.webhook_key
+    elseif name == "webhook_hide_name" then
+        config.webhook_hide_name = value; temp.webhook_hide_name = value
     elseif name == "webhook_interval" then
         config.webhook_interval = tonumber(value) or config.webhook_interval; temp.webhook_interval = tostring(config.webhook_interval)
     elseif name == "btn_webhook_test" then
         -- fetch bisa lama: jalan di thread, jangan di hook UI
         runThread(function()
             local p = getPlayer()
+            local spec = "E\nT|🧪 Tes Webhook\nC|" .. WH_COLOR.info
+                .. "\nD|Kalau pesan ini kelihatan rapi (kotak berwarna), relay.gs udah versi baru."
+                .. "\nF|👤 Player\t" .. specEsc(playerLabel()) .. "\t1"
+                .. "\nF|🌍 World\t" .. specEsc(safeGetWorldName() or "EXIT") .. "\t1"
+                .. "\nO|" .. WH_FOOTER
             local ok, info = webhookSend("🧪 Tes webhook dari " .. whClean(p and p.name or "?")
-                .. " | world " .. tostring(safeGetWorldName() or "EXIT"))
+                .. " | world " .. tostring(safeGetWorldName() or "EXIT"), nil, nil, spec)
             local msg = ok and ("Webhook OK: " .. info) or ("Webhook gagal: " .. info)
             if ok and not config.webhook_enable then
                 msg = msg .. " | TAPI 'Enable Webhook' masih MATI: laporan otomatis nggak dikirim"
@@ -2261,6 +2377,7 @@ function OnValue(vtype, name, value)
         config.webhook_url        = temp.webhook_url or ""
         config.webhook_key        = temp.webhook_key or ""
         config.webhook_interval   = tonumber(temp.webhook_interval) or config.webhook_interval
+        config.webhook_hide_name  = temp.webhook_hide_name
         config.collect_radius     = tonumber(temp.collect_radius) or config.collect_radius
         config.delay_place        = tonumber(temp.delay_place)         or config.delay_place
         config.delay_punch        = tonumber(temp.delay_punch)         or config.delay_punch
@@ -2303,6 +2420,7 @@ function OnValue(vtype, name, value)
         pref:set("webhook_url",         config.webhook_url)
         pref:set("webhook_key",         config.webhook_key)
         pref:set("webhook_interval",    config.webhook_interval)
+        pref:set("webhook_hide_name",   config.webhook_hide_name)
         pref:set("collect_radius",      config.collect_radius)
         pref:set("delay_place",         config.delay_place)
         pref:set("delay_punch",         config.delay_punch)
@@ -2376,7 +2494,7 @@ function OnValue(vtype, name, value)
             end)
         else
             if running then
-                webhookPush(buildReport("🔴 Bot dihentikan"))
+                webhookPush(buildReport("🔴 Bot Dihentikan", WH_COLOR.stop))
             end
             thread_instance = thread_instance + 1
             running = false
